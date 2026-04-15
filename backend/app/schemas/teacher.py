@@ -10,3 +10,15 @@ class TeacherChatRequest(BaseModel):
 class TeacherChatResponse(BaseModel):
     conversation_id: int
     answer: str
+
+
+class TeacherMessageOut(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: str
+
+
+class TeacherConversationMessagesResponse(BaseModel):
+    conversation_id: int
+    messages: list[TeacherMessageOut]

@@ -3,6 +3,14 @@ const ACCESS_TOKEN_KEY = "access_token";
 
 type TokenPayload = { access_token: string };
 let refreshInFlight: Promise<boolean> | null = null;
+export type TeacherMessage = { id: number; role: "user" | "assistant"; content: string; created_at: string };
+export type TeacherConversationMessagesResponse = { conversation_id: number; messages: TeacherMessage[] };
+export type TeacherChatStreamRequest = { message: string; document_ids: number[]; conversation_id?: number | null };
+type TeacherStreamHandlers = {
+  onDelta: (delta: string) => void;
+  onDone: (conversationId: number) => void;
+  onError: (detail: string) => void;
+};
 
 export function getToken(): string {
   if (typeof window === "undefined") {
@@ -119,4 +127,84 @@ export async function uploadFiles(path: string, files: File[]): Promise<unknown[
     results.push(response);
   }
   return results;
+}
+
+export async function deleteDocument(documentId: number): Promise<void> {
+  const response = await authorizedFetch(`/documents/${documentId}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+}
+
+export async function getConversationMessages(conversationId: number): Promise<TeacherConversationMessagesResponse> {
+  return apiFetch<TeacherConversationMessagesResponse>(`/teacher/conversations/${conversationId}/messages`);
+}
+
+export async function streamTeacherChat(
+  payload: TeacherChatStreamRequest,
+  handlers: TeacherStreamHandlers
+): Promise<void> {
+  const response = await authorizedFetch("/teacher/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok || !response.body) {
+    const detail = await response.text();
+    throw new Error(detail || `Streaming request failed ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let activeEvent = "";
+
+  const processBlock = (block: string) => {
+    const lines = block.split("\n");
+    let data = "";
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (line.startsWith("event:")) {
+        activeEvent = line.slice("event:".length).trim();
+      } else if (line.startsWith("data:")) {
+        data += line.slice("data:".length).trim();
+      }
+    }
+    if (!data) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(data) as { delta?: string; detail?: string; conversation_id?: number };
+      if (activeEvent === "delta" && parsed.delta) {
+        handlers.onDelta(parsed.delta);
+      } else if (activeEvent === "error") {
+        handlers.onError(parsed.detail || "Streaming error");
+      } else if (activeEvent === "done" && parsed.conversation_id) {
+        handlers.onDone(parsed.conversation_id);
+      }
+    } catch {
+      handlers.onError("Failed to parse stream event");
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+    let separatorIndex = buffer.indexOf("\n\n");
+    while (separatorIndex !== -1) {
+      const block = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+      processBlock(block);
+      separatorIndex = buffer.indexOf("\n\n");
+    }
+
+    if (done) {
+      if (buffer.trim().length > 0) {
+        processBlock(buffer);
+      }
+      break;
+    }
+  }
 }

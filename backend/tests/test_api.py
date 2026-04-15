@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -125,3 +126,154 @@ def test_reindex_documents():
     assert reindex.status_code == 200
     assert reindex.json()["documents"] == 1
     assert reindex.json()["chunks"] >= 1
+
+
+def test_delete_document_removes_selection():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None):
+        uploaded = client.post(
+            "/documents/upload",
+            headers=headers,
+            files={"file": ("delete-me.txt", b"delete me", "text/plain")},
+        )
+    assert uploaded.status_code == 200
+    doc_id = uploaded.json()["id"]
+
+    selected = client.put("/documents/selected", headers=headers, json={"document_ids": [doc_id]})
+    assert selected.status_code == 200
+    assert selected.json()["document_ids"] == [doc_id]
+
+    deleted = client.delete(f"/documents/{doc_id}", headers=headers)
+    assert deleted.status_code == 204
+
+    docs = client.get("/documents", headers=headers)
+    assert docs.status_code == 200
+    assert all(item["id"] != doc_id for item in docs.json())
+
+    selected_after = client.get("/documents/selected", headers=headers)
+    assert selected_after.status_code == 200
+    assert selected_after.json()["document_ids"] == []
+
+
+def test_conversation_messages_requires_ownership_and_keeps_order():
+    owner_payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    owner_register = client.post("/auth/register", json=owner_payload)
+    owner_headers = {"Authorization": f"Bearer {owner_register.json()['access_token']}"}
+
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
+        "app.api.routes_teacher.ai_client.embed", side_effect=_mock_embed
+    ), patch(
+        "app.api.routes_teacher.vector_store.search", return_value=["Chunk context"]
+    ), patch("app.api.routes_teacher.ai_client.chat", return_value="תשובה ראשונה"):
+        uploaded = client.post(
+            "/documents/upload",
+            headers=owner_headers,
+            files={"file": ("order.txt", b"Order content.", "text/plain")},
+        )
+        assert uploaded.status_code == 200
+        doc_id = uploaded.json()["id"]
+        selected = client.put("/documents/selected", headers=owner_headers, json={"document_ids": [doc_id]})
+        assert selected.status_code == 200
+        chat = client.post(
+            "/teacher/chat",
+            headers=owner_headers,
+            json={"message": "first question", "document_ids": [doc_id]},
+        )
+        assert chat.status_code == 200
+
+    conversation_id = chat.json()["conversation_id"]
+    messages = client.get(f"/teacher/conversations/{conversation_id}/messages", headers=owner_headers)
+    assert messages.status_code == 200
+    body = messages.json()
+    assert body["conversation_id"] == conversation_id
+    assert [item["role"] for item in body["messages"]] == ["user", "assistant"]
+    assert body["messages"][0]["content"] == "first question"
+    assert body["messages"][1]["content"] == "תשובה ראשונה"
+
+    other_payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    other_register = client.post("/auth/register", json=other_payload)
+    other_headers = {"Authorization": f"Bearer {other_register.json()['access_token']}"}
+    unauthorized = client.get(f"/teacher/conversations/{conversation_id}/messages", headers=other_headers)
+    assert unauthorized.status_code == 404
+
+
+def test_delete_document_requires_ownership():
+    owner_payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    owner_register = client.post("/auth/register", json=owner_payload)
+    owner_headers = {"Authorization": f"Bearer {owner_register.json()['access_token']}"}
+
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None):
+        uploaded = client.post(
+            "/documents/upload",
+            headers=owner_headers,
+            files={"file": ("private.txt", b"private", "text/plain")},
+        )
+    assert uploaded.status_code == 200
+    doc_id = uploaded.json()["id"]
+
+    other_payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    other_register = client.post("/auth/register", json=other_payload)
+    other_headers = {"Authorization": f"Bearer {other_register.json()['access_token']}"}
+
+    delete_attempt = client.delete(f"/documents/{doc_id}", headers=other_headers)
+    assert delete_attempt.status_code == 404
+
+    owner_docs = client.get("/documents", headers=owner_headers)
+    assert owner_docs.status_code == 200
+    assert any(item["id"] == doc_id for item in owner_docs.json())
+
+
+def test_teacher_chat_stream_returns_deltas_and_persists_messages():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
+        "app.api.routes_teacher.ai_client.embed", side_effect=_mock_embed
+    ), patch("app.api.routes_teacher.vector_store.search", return_value=["Chunk context"]), patch(
+        "app.api.routes_teacher.ai_client.chat_stream", return_value=iter(["שלום", " עולם"])
+    ):
+        uploaded = client.post(
+            "/documents/upload",
+            headers=headers,
+            files={"file": ("stream.txt", b"Streaming content.", "text/plain")},
+        )
+        assert uploaded.status_code == 200
+        doc_id = uploaded.json()["id"]
+        selected = client.put("/documents/selected", headers=headers, json={"document_ids": [doc_id]})
+        assert selected.status_code == 200
+
+        stream_response = client.post(
+            "/teacher/chat/stream",
+            headers=headers,
+            json={"message": "מה למדת?", "document_ids": [doc_id]},
+        )
+
+    assert stream_response.status_code == 200
+    body = stream_response.text
+    assert "event: delta" in body
+    assert '"delta": "שלום"' in body
+    assert '"delta": " עולם"' in body
+    assert "event: done" in body
+
+    match = re.search(r'"conversation_id":\s*(\d+)', body)
+    assert match is not None
+    conversation_id = int(match.group(1))
+    messages = client.get(f"/teacher/conversations/{conversation_id}/messages", headers=headers)
+    assert messages.status_code == 200
+    roles = [item["role"] for item in messages.json()["messages"]]
+    assert "user" in roles
+    assert "assistant" in roles

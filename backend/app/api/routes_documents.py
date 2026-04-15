@@ -2,7 +2,7 @@ from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
@@ -163,3 +163,21 @@ def reindex_documents(db: Session = Depends(get_db), user: User = Depends(get_cu
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"שגיאת אינדוקס ל-Qdrant: {exc}") from exc
     return {"documents": len(documents), "chunks": total_chunks}
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(document_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    document = db.query(Document).filter(Document.id == document_id, Document.user_id == user.id).first()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="המסמך לא נמצא")
+
+    db.query(UserDocumentSelection).filter(
+        UserDocumentSelection.user_id == user.id, UserDocumentSelection.document_id == document_id
+    ).delete(synchronize_session=False)
+    db.delete(document)
+    db.commit()
+
+    try:
+        Path(document.path).unlink(missing_ok=True)
+    except Exception:
+        pass

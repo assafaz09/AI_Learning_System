@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Generator
+
 from openai import OpenAI
 
 from app.core.config import settings
@@ -31,6 +33,22 @@ class AIClient:
             temperature=0.2,
         )
         return response.choices[0].message.content or ""
+
+    def chat_stream(self, system_prompt: str, user_prompt: str) -> Generator[str, None, None]:
+        client = self._require_client()
+        stream = client.chat.completions.create(
+            model=settings.openai_chat_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.2,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                yield delta
 
 
 ai_client = AIClient()
