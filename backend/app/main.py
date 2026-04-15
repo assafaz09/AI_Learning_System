@@ -7,6 +7,7 @@ from app.api.routes_grading import router as grading_router
 from app.api.routes_history import router as history_router
 from app.api.routes_quiz import router as quiz_router
 from app.api.routes_teacher import router as teacher_router
+from app.core.config import settings
 from app.db import Base, engine
 
 
@@ -15,9 +16,10 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="AI Learning System API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in settings.cors_allow_origins.split(",") if origin.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 
