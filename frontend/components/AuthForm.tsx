@@ -3,9 +3,9 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { apiFetch } from "../lib/api";
+import { apiFetch, setAccessToken } from "../lib/api";
 
-type Tokens = { access_token: string; refresh_token: string };
+type Tokens = { access_token: string; refresh_token?: string };
 type AuthMode = "login" | "register";
 
 type AuthFormProps = {
@@ -26,8 +26,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         method: "POST",
         body: JSON.stringify({ email, password })
       });
-      localStorage.setItem("access_token", tokens.access_token);
-      localStorage.setItem("refresh_token", tokens.refresh_token);
+      setAccessToken(tokens.access_token);
       setResult("ההתחברות בוצעה בהצלחה");
       router.replace("/dashboard");
     } catch (error) {

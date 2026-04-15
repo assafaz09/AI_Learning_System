@@ -31,10 +31,17 @@ def test_register_and_login():
     register = client.post("/auth/register", json=payload)
     assert register.status_code == 200
     assert "access_token" in register.json()
+    assert register.json().get("refresh_token") is None
+    assert "refresh_token=" in (register.headers.get("set-cookie") or "")
 
     login = client.post("/auth/login", json=payload)
     assert login.status_code == 200
-    assert "refresh_token" in login.json()
+    assert "access_token" in login.json()
+    assert "refresh_token=" in (login.headers.get("set-cookie") or "")
+
+    refreshed = client.post("/auth/refresh", json={})
+    assert refreshed.status_code == 200
+    assert "access_token" in refreshed.json()
 
 
 def test_selected_documents_flow():

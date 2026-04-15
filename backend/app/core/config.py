@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_minutes: int = 60 * 24 * 7
+    jwt_refresh_cookie_name: str = "refresh_token"
+    jwt_refresh_cookie_secure: bool = False
+    jwt_refresh_cookie_samesite: str = "lax"
+    cors_allow_origins: str = "http://localhost:3000"
     openai_api_key: str = ""
     openai_chat_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
