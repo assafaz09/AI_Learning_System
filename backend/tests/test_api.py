@@ -20,6 +20,10 @@ def _mock_embed(_: str) -> list[float]:
     return [0.1] * 64
 
 
+def _mock_chunk_id() -> str:
+    return str(uuid4())
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -50,7 +54,9 @@ def test_selected_documents_flow():
     token = register.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed):
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None):
         first_doc = client.post(
             "/documents/upload",
             headers=headers,
@@ -87,6 +93,8 @@ def test_pdf_upload_uses_pdf_parser():
 
     with patch("app.api.routes_documents.PdfReader", return_value=fake_reader), patch(
         "app.api.routes_documents.ai_client.embed", side_effect=_mock_embed
+    ), patch("app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id), patch(
+        "app.api.routes_documents.vector_store.upsert_chunk", return_value=None
     ):
         uploaded = client.post(
             "/documents/upload",
@@ -95,3 +103,25 @@ def test_pdf_upload_uses_pdf_parser():
         )
     assert uploaded.status_code == 200
     assert uploaded.json()["name"] == "study.pdf"
+
+
+def test_reindex_documents():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None):
+        uploaded = client.post(
+            "/documents/upload",
+            headers=headers,
+            files={"file": ("doc.txt", b"Reindex source content.", "text/plain")},
+        )
+        assert uploaded.status_code == 200
+        reindex = client.post("/documents/reindex", headers=headers)
+
+    assert reindex.status_code == 200
+    assert reindex.json()["documents"] == 1
+    assert reindex.json()["chunks"] >= 1

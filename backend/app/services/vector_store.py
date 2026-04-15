@@ -10,7 +10,6 @@ from app.core.config import settings
 
 class VectorStore:
     def __init__(self) -> None:
-        self.memory_chunks: list[dict] = []
         self.enabled = True
         self.collection = settings.qdrant_collection_name
         self.vector_size: int | None = None
@@ -52,9 +51,7 @@ class VectorStore:
 
     def upsert_chunk(self, chunk_id: str, vector: list[float], payload: dict) -> None:
         if not self.enabled:
-            self.vector_size = len(vector)
-            self.memory_chunks.append({"id": chunk_id, "vector": vector, "payload": payload})
-            return
+            raise RuntimeError("Qdrant is not available; chunk cannot be indexed")
         self._ensure_collection(len(vector))
         self.client.upsert(
             collection_name=self.collection,
@@ -65,13 +62,7 @@ class VectorStore:
         if not document_ids:
             return []
         if not self.enabled:
-            texts = [
-                str(chunk["payload"].get("text", ""))
-                for chunk in self.memory_chunks
-                if chunk["payload"].get("user_id") == user_id
-                and chunk["payload"].get("document_id") in document_ids
-            ]
-            return texts[:limit]
+            raise RuntimeError("Qdrant is not available; semantic search is disabled")
         self._ensure_collection(len(vector))
         hits = self.client.search(
             collection_name=self.collection,

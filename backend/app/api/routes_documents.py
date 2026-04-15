@@ -32,6 +32,19 @@ def sanitize_text(text: str) -> str:
     return "\n".join(line.strip() for line in sanitized.splitlines() if line.strip())
 
 
+def index_document_chunks(user_id: int, document_id: int, content: str) -> int:
+    indexed = 0
+    for chunk in chunk_text(content):
+        vector = ai_client.embed(chunk)
+        vector_store.upsert_chunk(
+            chunk_id=vector_store.new_chunk_id(),
+            vector=vector,
+            payload={"user_id": user_id, "document_id": document_id, "text": chunk},
+        )
+        indexed += 1
+    return indexed
+
+
 def extract_text_from_upload(file: UploadFile, content_bytes: bytes) -> str:
     filename = (file.filename or "").lower()
     is_pdf = filename.endswith(".pdf") or file.content_type == "application/pdf"
@@ -78,13 +91,7 @@ async def upload_document(
         db.flush()
 
         try:
-            for chunk in chunk_text(content):
-                vector = ai_client.embed(chunk)
-                vector_store.upsert_chunk(
-                    chunk_id=vector_store.new_chunk_id(),
-                    vector=vector,
-                    payload={"user_id": user.id, "document_id": doc.id, "text": chunk},
-                )
+            index_document_chunks(user.id, doc.id, content)
         except Exception as exc:
             db.rollback()
             try:
@@ -144,3 +151,15 @@ def set_selected_documents(
         db.add(UserDocumentSelection(user_id=user.id, document_id=document_id))
     db.commit()
     return SelectedDocumentsResponse(document_ids=valid_ids)
+
+
+@router.post("/reindex")
+def reindex_documents(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    documents = db.query(Document).filter(Document.user_id == user.id).all()
+    total_chunks = 0
+    try:
+        for doc in documents:
+            total_chunks += index_document_chunks(user.id, doc.id, doc.content)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"שגיאת אינדוקס ל-Qdrant: {exc}") from exc
+    return {"documents": len(documents), "chunks": total_chunks}
