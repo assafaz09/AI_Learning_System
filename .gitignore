@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+node_modules/
+.next/
+dist/
+.env
+backend/tests/test.db
+backend/tests/test_e2e.db
