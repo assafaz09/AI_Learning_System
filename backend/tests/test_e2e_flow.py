@@ -20,6 +20,12 @@ def _mock_chat(_: str, __: str) -> str:
     return "Q: מהי ירידת מפל\nA: שיטת אופטימיזציה איטרטיבית"
 
 
+def _mock_chunk_id() -> str:
+    from uuid import uuid4
+
+    return str(uuid4())
+
+
 def test_end_to_end_learning_flow():
     client = TestClient(app)
 
@@ -29,6 +35,12 @@ def test_end_to_end_learning_flow():
     headers = {"Authorization": f"Bearer {token}"}
 
     with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch(
+        "app.api.routes_documents.vector_store.upsert_chunk", return_value=None
+    ), patch(
+        "app.api.routes_teacher.vector_store.search", return_value=["Gradient descent optimizes iteratively."]
+    ), patch(
         "app.api.routes_teacher.ai_client.embed", side_effect=_mock_embed
     ), patch("app.api.routes_teacher.ai_client.chat", side_effect=_mock_chat), patch(
         "app.api.routes_quiz.ai_client.chat", side_effect=_mock_chat
@@ -40,7 +52,9 @@ def test_end_to_end_learning_flow():
         )
     assert uploaded.status_code == 200
     doc_id = uploaded.json()["id"]
-    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed):
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None):
         uploaded_two = client.post(
             "/documents/upload",
             headers=headers,

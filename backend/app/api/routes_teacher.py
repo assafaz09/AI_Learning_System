@@ -39,6 +39,11 @@ def teacher_chat(payload: TeacherChatRequest, db: Session = Depends(get_db), use
     try:
         user_vector = ai_client.embed(payload.message)
         contexts = vector_store.search(user_vector, user_id=user.id, document_ids=selected_ids, limit=5)
+        if not contexts:
+            raise HTTPException(
+                status_code=409,
+                detail="לא נמצאו מקטעים סמנטיים למסמכים שנבחרו. יש לבצע אינדוקס מחדש או לבדוק חיבור ל-Qdrant",
+            )
         prompt = (
             "אתה סוכן מורה חכם. ענה רק על בסיס ההקשר שסופק לך.\n\n"
             f"הקשר:\n{chr(10).join(contexts)}\n\n"
