@@ -1,16 +1,21 @@
+import re
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from httpx import Timeout, get
 from pypdf import PdfReader
 from sqlalchemy.orm import Session
+from yt_dlp import YoutubeDL
+from youtube_transcript_api import YouTubeTranscriptApi
 
 from app.api.dependencies import get_current_user
 from app.core.config import settings
 from app.db import get_db
 from app.models import Document, User, UserDocumentSelection
-from app.schemas import DocumentOut, SelectedDocumentsRequest, SelectedDocumentsResponse
+from app.schemas import DocumentOut, ExternalSourceImportRequest, SelectedDocumentsRequest, SelectedDocumentsResponse
 from app.services.ai import ai_client
 from app.services.vector_store import VectorStore
 
@@ -30,6 +35,82 @@ def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
 def sanitize_text(text: str) -> str:
     sanitized = text.replace("\x00", "")
     return "\n".join(line.strip() for line in sanitized.splitlines() if line.strip())
+
+
+def _extract_youtube_video_id(url: str) -> str | None:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    if "youtu.be" in host:
+        video_id = parsed.path.lstrip("/").split("/")[0]
+        return video_id or None
+    if "youtube.com" in host:
+        if parsed.path == "/watch":
+            query = parse_qs(parsed.query)
+            video_id = query.get("v", [""])[0]
+            return video_id or None
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) >= 2 and parts[0] in {"embed", "shorts"}:
+            return parts[1]
+    return None
+
+
+def _extract_webpage_text(url: str) -> tuple[str, str]:
+    response = get(url, timeout=Timeout(12.0))
+    response.raise_for_status()
+    html = response.text
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", html, flags=re.IGNORECASE | re.DOTALL)
+    title = re.sub(r"\s+", " ", title_match.group(1)).strip() if title_match else "Web Source"
+    without_scripts = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.IGNORECASE | re.DOTALL)
+    no_tags = re.sub(r"<[^>]+>", " ", without_scripts)
+    text = sanitize_text(re.sub(r"\s+", " ", no_tags))
+    if not text:
+        raise HTTPException(status_code=400, detail="לא ניתן לחלץ טקסט מהעמוד")
+    return title, text
+
+
+def _download_youtube_audio(url: str, video_id: str) -> Path:
+    target_template = str(Path(settings.upload_dir) / f"{video_id}_{uuid4()}.%(ext)s")
+    options = {
+        "format": "bestaudio/best",
+        "outtmpl": target_template,
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+    }
+    with YoutubeDL(options) as ydl:
+        info = ydl.extract_info(url, download=True)
+        file_path = Path(ydl.prepare_filename(info))
+    if not file_path.exists():
+        raise RuntimeError("Failed to download YouTube audio")
+    return file_path
+
+
+def _extract_youtube_text(url: str) -> tuple[str, str, str]:
+    video_id = _extract_youtube_video_id(url)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="קישור YouTube לא תקין")
+    try:
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=["he", "en"])
+        text = sanitize_text(" ".join(item.get("text", "") for item in transcript))
+    except Exception as exc:
+        audio_path: Path | None = None
+        try:
+            audio_path = _download_youtube_audio(url, video_id)
+            text = sanitize_text(ai_client.transcribe_audio(audio_path))
+        except Exception as fallback_exc:
+            raise HTTPException(
+                status_code=400,
+                detail="לא ניתן לייבא את הסרטון מ-YouTube. אין כתוביות זמינות וגם תמלול האודיו נכשל.",
+            ) from fallback_exc
+        finally:
+            if audio_path:
+                try:
+                    audio_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+    if not text:
+        raise HTTPException(status_code=400, detail="לא נמצא תמלול טקסטואלי בסרטון YouTube.")
+    return f"YouTube:{video_id}", text, video_id
 
 
 def index_document_chunks(user_id: int, document_id: int, content: str) -> int:
@@ -70,6 +151,33 @@ def extract_text_from_upload(file: UploadFile, content_bytes: bytes) -> str:
     return clean_text
 
 
+def _create_and_index_document(
+    db: Session,
+    user: User,
+    name: str,
+    content: str,
+    path_value: str,
+    source_type: str = "file",
+    source_url: str | None = None,
+    external_id: str | None = None,
+) -> Document:
+    doc = Document(
+        user_id=user.id,
+        name=name,
+        content=content,
+        path=path_value,
+        source_type=source_type,
+        source_url=source_url,
+        external_id=external_id,
+    )
+    db.add(doc)
+    db.flush()
+    index_document_chunks(user.id, doc.id, content)
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
 @router.post("/upload", response_model=DocumentOut)
 async def upload_document(
     file: UploadFile = File(...),
@@ -86,12 +194,15 @@ async def upload_document(
         full_path = upload_dir / file_name
         full_path.write_bytes(content_bytes)
 
-        doc = Document(user_id=user.id, name=file.filename or "מסמך.txt", content=content, path=str(full_path))
-        db.add(doc)
-        db.flush()
-
         try:
-            index_document_chunks(user.id, doc.id, content)
+            return _create_and_index_document(
+                db,
+                user,
+                file.filename or "מסמך.txt",
+                content,
+                str(full_path),
+                source_type="file",
+            )
         except Exception as exc:
             db.rollback()
             try:
@@ -99,10 +210,6 @@ async def upload_document(
             except Exception:
                 pass
             raise HTTPException(status_code=503, detail=f"שגיאת חיבור ל-LLM/Embeddings: {exc}") from exc
-
-        db.commit()
-        db.refresh(doc)
-        return doc
     except HTTPException:
         raise
     except Exception as exc:
@@ -181,3 +288,35 @@ def delete_document(document_id: int, db: Session = Depends(get_db), user: User 
         Path(document.path).unlink(missing_ok=True)
     except Exception:
         pass
+
+
+@router.post("/import-url", response_model=DocumentOut)
+def import_external_source(
+    payload: ExternalSourceImportRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    url = str(payload.url)
+    try:
+        if "youtu" in url.lower():
+            name, content, external_id = _extract_youtube_text(url)
+            source_type = "youtube"
+        else:
+            name, content = _extract_webpage_text(url)
+            external_id = None
+            source_type = "web"
+        return _create_and_index_document(
+            db,
+            user,
+            name=name,
+            content=content,
+            path_value=f"external:{url}",
+            source_type=source_type,
+            source_url=url,
+            external_id=external_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"שגיאה בייבוא מקור חיצוני: {exc}") from exc

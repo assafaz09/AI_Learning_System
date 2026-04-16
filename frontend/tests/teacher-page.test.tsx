@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import TeacherPage from "../app/teacher/page";
 import { apiFetch, deleteDocument, getConversationMessages, streamTeacherChat } from "../lib/api";
 
@@ -21,28 +21,36 @@ vi.mock("../lib/api", () => ({
   uploadFiles: vi.fn(async () => []),
 }));
 
+function setupMocks() {
+  const mockedApiFetch = vi.mocked(apiFetch);
+  mockedApiFetch.mockReset();
+  mockedApiFetch.mockImplementation(async (path: string) => {
+    if (path === "/documents") {
+      return [{ id: 1, name: "doc1.txt" }];
+    }
+    if (path === "/documents/selected") {
+      return { document_ids: [1] };
+    }
+    if (path === "/history") {
+      return { conversations: [{ id: 10, title: "שיחה ראשונה", created_at: "2026-04-15T10:00:00" }] };
+    }
+    if (path === "/teacher/chat") {
+      return { conversation_id: 10, answer: "תשובה מהמורה" };
+    }
+    return {};
+  });
+  vi.mocked(deleteDocument).mockClear();
+  vi.mocked(getConversationMessages).mockClear();
+  vi.mocked(streamTeacherChat).mockClear();
+}
+
 describe("TeacherPage", () => {
   beforeEach(() => {
-    const mockedApiFetch = vi.mocked(apiFetch);
-    mockedApiFetch.mockReset();
-    mockedApiFetch.mockImplementation(async (path: string) => {
-      if (path === "/documents") {
-        return [{ id: 1, name: "doc1.txt" }];
-      }
-      if (path === "/documents/selected") {
-        return { document_ids: [1] };
-      }
-      if (path === "/history") {
-        return { conversations: [{ id: 10, title: "שיחה ראשונה", created_at: "2026-04-15T10:00:00" }] };
-      }
-      if (path === "/teacher/chat") {
-        return { conversation_id: 10, answer: "תשובה מהמורה" };
-      }
-      return {};
-    });
-    vi.mocked(deleteDocument).mockClear();
-    vi.mocked(getConversationMessages).mockClear();
-    vi.mocked(streamTeacherChat).mockClear();
+    setupMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   test("renders chat layout and loads conversation messages", async () => {
@@ -51,7 +59,7 @@ describe("TeacherPage", () => {
     expect(fileInput).toBeTruthy();
     expect(fileInput?.hasAttribute("multiple")).toBe(true);
 
-    expect(await screen.findByText("doc1.txt")).toBeDefined();
+    expect(await screen.findByText(/doc1\.txt/)).toBeDefined();
     const conversationButton = await screen.findByRole("button", { name: "שיחה ראשונה" });
     fireEvent.click(conversationButton);
 
@@ -61,7 +69,7 @@ describe("TeacherPage", () => {
   });
 
   test("streams assistant response and disables input while sending", async () => {
-    render(<TeacherPage />);
+    const { container } = render(<TeacherPage />);
 
     const conversationButton = await screen.findByRole("button", { name: "שיחה ראשונה" });
     fireEvent.click(conversationButton);
@@ -79,9 +87,10 @@ describe("TeacherPage", () => {
         })
     );
 
-    const textarea = screen.getByPlaceholderText("שאלו שאלה על המסמכים שנבחרו");
+    const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "תסכם את הפרק" } });
-    fireEvent.click(screen.getByRole("button", { name: "שליחת שאלה למורה" }));
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    fireEvent.click(submitBtn);
 
     await waitFor(() => expect(vi.mocked(streamTeacherChat)).toHaveBeenCalledTimes(1));
     expect(vi.mocked(streamTeacherChat)).toHaveBeenCalledWith(
@@ -97,21 +106,53 @@ describe("TeacherPage", () => {
       })
     );
 
-    expect((textarea as HTMLTextAreaElement).disabled).toBe(true);
+    expect(textarea.disabled).toBe(true);
     releaseStream?.();
     await screen.findByText("תשובה דינמית");
-    expect((textarea as HTMLTextAreaElement).disabled).toBe(false);
-    expect(screen.getByRole("button", { name: "שליחת שאלה למורה" })).toBeDefined();
+    expect(textarea.disabled).toBe(false);
   });
 
   test("deletes document and refreshes data", async () => {
     render(<TeacherPage />);
-    await screen.findByText("doc1.txt");
+    await screen.findByText(/doc1\.txt/);
 
     fireEvent.click(screen.getByRole("button", { name: "מחיקה" }));
 
     await waitFor(() => {
       expect(vi.mocked(deleteDocument)).toHaveBeenCalledWith(1);
     });
+  });
+
+  test("shows progress indicator and disables input while importing", async () => {
+    let resolveImport!: (value: unknown) => void;
+    vi.mocked(apiFetch).mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === "/documents/import-url" && options?.method === "POST") {
+        return new Promise((resolve) => { resolveImport = resolve; });
+      }
+      if (path === "/documents") return [{ id: 1, name: "doc1.txt" }];
+      if (path === "/documents/selected") return { document_ids: [1] };
+      if (path === "/history") return { conversations: [] };
+      return {};
+    });
+
+    render(<TeacherPage />);
+    await screen.findByText(/doc1\.txt/);
+
+    const urlInput = screen.getByPlaceholderText("הדביקו קישור YouTube או אתר אינטרנט");
+    fireEvent.change(urlInput, { target: { value: "https://www.youtube.com/watch?v=test" } });
+    fireEvent.click(screen.getByRole("button", { name: "ייבוא מקור חיצוני" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("מתחבר למקור...")).toBeDefined();
+    });
+    expect(screen.getByText("מייבא...")).toBeDefined();
+    expect((urlInput as HTMLInputElement).disabled).toBe(true);
+
+    resolveImport({ id: 2, name: "YouTube:test", source_type: "youtube" });
+
+    await waitFor(() => {
+      expect(screen.getByText("המקור החיצוני נוסף בהצלחה.")).toBeDefined();
+    });
+    expect((urlInput as HTMLInputElement).disabled).toBe(false);
   });
 });

@@ -610,6 +610,87 @@ label input[type="checkbox"] {
   }
 }
 
+.import-section {
+  display: grid;
+  gap: 8px;
+}
+
+.import-progress-bar {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef4ff 0%, #f5f0ff 100%);
+  border: 1px solid #d6e2f9;
+  animation: rise-in 300ms ease-out;
+}
+
+.import-progress-track {
+  height: 4px;
+  border-radius: 4px;
+  background: #dbe5f5;
+  overflow: hidden;
+}
+
+.import-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent) 0%, #818cf8 100%);
+  animation: progress-indeterminate 1.6s ease-in-out infinite;
+}
+
+.import-progress-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+
+.spinner-inline {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 999px;
+  border: 2.5px solid #bfdbfe;
+  border-top-color: var(--accent);
+  animation: spin 800ms linear infinite;
+}
+
+.btn-loading-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-loading-content .spinner-inline {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+.btn-importing {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    width: 10%;
+    margin-inline-start: 0;
+  }
+  50% {
+    width: 60%;
+    margin-inline-start: 20%;
+  }
+  100% {
+    width: 10%;
+    margin-inline-start: 90%;
+  }
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;

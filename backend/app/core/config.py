@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_chat_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
+    openai_transcription_model: str = "whisper-1"
+    whisper_mode: str = "local"  # "local" (free, slower) or "api" (paid, faster)
+    whisper_local_model: str = "base"
     qdrant_url: str = "http://qdrant:6333"
     qdrant_api_key: str = ""
     qdrant_collection_name: str = "documents"

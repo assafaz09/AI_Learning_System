@@ -14,6 +14,9 @@ class Document(Base):
     name: Mapped[str] = mapped_column(String(255))
     content: Mapped[str] = mapped_column(Text)
     path: Mapped[str] = mapped_column(String(512))
+    source_type: Mapped[str] = mapped_column(String(32), default="file")
+    source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

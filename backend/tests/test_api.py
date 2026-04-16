@@ -2,7 +2,7 @@ import json
 import os
 import re
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -362,3 +362,122 @@ def test_generate_quiz_requires_question_type():
         json={"document_ids": [doc_id], "difficulty": "medium", "question_count": 1},
     )
     assert response.status_code == 422
+
+
+def test_import_external_web_source():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+
+    fake_response = Mock()
+    fake_response.text = (
+        "<html><head><title>AI Article</title></head><body>"
+        "<h1>Machine Learning</h1><p>Models learn patterns from data.</p></body></html>"
+    )
+    fake_response.raise_for_status = Mock()
+
+    with patch("app.api.routes_documents.get", return_value=fake_response), patch(
+        "app.api.routes_documents.ai_client.embed", side_effect=_mock_embed
+    ), patch("app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id), patch(
+        "app.api.routes_documents.vector_store.upsert_chunk", return_value=None
+    ):
+        imported = client.post("/documents/import-url", headers=headers, json={"url": "https://example.com/article"})
+
+    assert imported.status_code == 200
+    assert imported.json()["name"] == "AI Article"
+    assert imported.json()["source_type"] == "web"
+    assert imported.json()["source_url"] == "https://example.com/article"
+    assert imported.json()["external_id"] is None
+
+
+def test_import_external_youtube_source():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+
+    with patch(
+        "app.api.routes_documents.YouTubeTranscriptApi.get_transcript",
+        return_value=[{"text": "line one"}, {"text": "line two"}],
+    ), patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None):
+        imported = client.post(
+            "/documents/import-url",
+            headers=headers,
+            json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+        )
+
+    assert imported.status_code == 200
+    assert imported.json()["name"] == "YouTube:dQw4w9WgXcQ"
+    assert imported.json()["source_type"] == "youtube"
+    assert imported.json()["external_id"] == "dQw4w9WgXcQ"
+
+
+def test_import_external_youtube_without_transcript_uses_audio_transcription():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+
+    with patch(
+        "app.api.routes_documents.YouTubeTranscriptApi.get_transcript",
+        side_effect=Exception("no transcript"),
+    ), patch(
+        "app.api.routes_documents._download_youtube_audio",
+        return_value=Path("/tmp/fake-audio.mp3"),
+    ), patch(
+        "app.api.routes_documents.ai_client.transcribe_audio",
+        return_value="transcribed audio content",
+    ), patch(
+        "app.api.routes_documents.ai_client.embed", side_effect=_mock_embed
+    ), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None
+    ):
+        imported = client.post(
+            "/documents/import-url",
+            headers=headers,
+            json={"url": "https://www.youtube.com/watch?v=abc123xyz99"},
+        )
+
+    assert imported.status_code == 200
+    assert imported.json()["source_type"] == "youtube"
+    assert imported.json()["external_id"] == "abc123xyz99"
+
+
+def test_transcribe_audio_uses_local_whisper_when_configured():
+    with patch("app.services.ai.settings") as mock_settings:
+        mock_settings.openai_api_key = "sk-test"
+        mock_settings.whisper_mode = "local"
+        mock_settings.whisper_local_model = "base"
+
+        from app.services.ai import AIClient
+
+        ai = AIClient()
+
+        fake_segment = type("Seg", (), {"text": " hello world "})()
+        mock_model = MagicMock()
+        mock_model.transcribe.return_value = ([fake_segment], None)
+        ai._local_whisper_model = mock_model
+
+        result = ai.transcribe_audio("/tmp/test.mp3")
+        assert result == "hello world"
+        mock_model.transcribe.assert_called_once()
+
+
+def test_transcribe_audio_uses_api_when_configured():
+    with patch("app.services.ai.settings") as mock_settings:
+        mock_settings.openai_api_key = "sk-test"
+        mock_settings.whisper_mode = "api"
+        mock_settings.openai_transcription_model = "whisper-1"
+
+        from app.services.ai import AIClient
+
+        ai = AIClient()
+        mock_response = MagicMock()
+        mock_response.text = "api transcription result"
+        ai.client = MagicMock()
+        ai.client.audio.transcriptions.create.return_value = mock_response
+
+        result = ai.transcribe_audio("/tmp/test.mp3")
+        assert result == "api transcription result"
+        ai.client.audio.transcriptions.create.assert_called_once()

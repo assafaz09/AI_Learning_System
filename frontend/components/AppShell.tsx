@@ -46,7 +46,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const links: { href: Route; label: string }[] = [
     { href: "/dashboard", label: "בית" },
-    { href: "/teacher", label: "סוכן מורה" },
+    { href: "/teacher", label: "המורה שלך" },
     { href: "/quiz", label: "צור שאלון" },
     { href: "/grader", label: "בחן את עצמך" },
     { href: "/history", label: "היסטוריה" },

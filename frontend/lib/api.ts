@@ -88,13 +88,28 @@ async function authorizedFetch(path: string, options: RequestInit = {}, canRetry
   return fetch(`${baseUrl}${path}`, { ...options, headers: retryHeaders, credentials: "include" });
 }
 
+async function readErrorDetail(response: Response): Promise<string> {
+  const body = await response.text();
+  if (!body) {
+    return `Request failed ${response.status}`;
+  }
+  try {
+    const parsed = JSON.parse(body) as { detail?: string };
+    if (parsed?.detail) {
+      return parsed.detail;
+    }
+  } catch {
+    // keep raw body when backend returns non-JSON content
+  }
+  return body;
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
   const response = await authorizedFetch(path, { ...options, headers });
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Request failed ${response.status}`);
+    throw new Error(await readErrorDetail(response));
   }
   const text = await response.text();
   if (!text) {
@@ -111,7 +126,7 @@ export async function uploadFile(path: string, file: File): Promise<unknown> {
     body: form
   });
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readErrorDetail(response));
   }
   const text = await response.text();
   if (!text) {
@@ -132,7 +147,7 @@ export async function uploadFiles(path: string, files: File[]): Promise<unknown[
 export async function deleteDocument(documentId: number): Promise<void> {
   const response = await authorizedFetch(`/documents/${documentId}`, { method: "DELETE" });
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await readErrorDetail(response));
   }
 }
 
@@ -151,7 +166,7 @@ export async function streamTeacherChat(
   });
 
   if (!response.ok || !response.body) {
-    const detail = await response.text();
+    const detail = await readErrorDetail(response);
     throw new Error(detail || `Streaming request failed ${response.status}`);
   }
 

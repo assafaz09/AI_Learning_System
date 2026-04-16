@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   apiFetch,
   deleteDocument,
@@ -10,12 +10,36 @@ import {
   uploadFiles
 } from "../../lib/api";
 
-type Doc = { id: number; name: string };
+const IMPORT_PROGRESS_MESSAGES = [
+  "מתחבר למקור...",
+  "מוריד תוכן...",
+  "מעבד ומנתח...",
+  "מתמלל אודיו (עשוי לקחת דקה)...",
+  "מאנדקס את התוכן...",
+  "כמעט סיימנו...",
+];
+
+type Doc = {
+  id: number;
+  name: string;
+  source_type?: "file" | "web" | "youtube";
+  source_url?: string | null;
+};
 type SelectedDocsResponse = { document_ids: number[] };
 type Conversation = { id: number; title: string; created_at: string };
 type HistoryResponse = { conversations: Conversation[] };
 
 export default function TeacherPage() {
+  const getSourceLabel = (doc: Doc) => {
+    if (doc.source_type === "youtube") {
+      return "YouTube";
+    }
+    if (doc.source_type === "web") {
+      return "Web";
+    }
+    return "File";
+  };
+
   const [documents, setDocuments] = useState<Doc[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [question, setQuestion] = useState("");
@@ -23,6 +47,8 @@ export default function TeacherPage() {
   const [currentConversationId, setCurrentConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [uploadStatus, setUploadStatus] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceStatus, setSourceStatus] = useState("");
   const [selectionStatus, setSelectionStatus] = useState("");
   const [chatStatus, setChatStatus] = useState("");
   const [deleteStatus, setDeleteStatus] = useState("");
@@ -30,7 +56,28 @@ export default function TeacherPage() {
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const streamAnchorRef = useRef<HTMLDivElement | null>(null);
+  const importTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startImportProgress = useCallback(() => {
+    let step = 0;
+    setImportProgress(IMPORT_PROGRESS_MESSAGES[0]);
+    importTimerRef.current = setInterval(() => {
+      step = Math.min(step + 1, IMPORT_PROGRESS_MESSAGES.length - 1);
+      setImportProgress(IMPORT_PROGRESS_MESSAGES[step]);
+    }, 4000);
+  }, []);
+
+  const stopImportProgress = useCallback(() => {
+    if (importTimerRef.current) {
+      clearInterval(importTimerRef.current);
+      importTimerRef.current = null;
+    }
+    setImportProgress("");
+  }, []);
 
   const canAsk = useMemo(
     () => question.trim().length > 0 && selected.length > 0 && !isStreaming,
@@ -87,7 +134,7 @@ export default function TeacherPage() {
     if (!streamAnchorRef.current) {
       return;
     }
-    streamAnchorRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    streamAnchorRef.current.scrollIntoView?.({ behavior: "smooth", block: "end" });
   }, [messages, isStreaming]);
 
   const onFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -95,7 +142,8 @@ export default function TeacherPage() {
     if (files.length === 0) {
       return;
     }
-    setUploadStatus("מעלה מסמכים...");
+    setIsUploading(true);
+    setUploadStatus("");
     try {
       await uploadFiles("/documents/upload", files);
       await loadDocs();
@@ -103,7 +151,32 @@ export default function TeacherPage() {
     } catch (error) {
       setUploadStatus(error instanceof Error ? error.message : "העלאת המסמכים נכשלה");
     } finally {
+      setIsUploading(false);
       e.target.value = "";
+    }
+  };
+
+  const importExternalSource = async () => {
+    if (!sourceUrl.trim()) {
+      setSourceStatus("יש להזין קישור תקין.");
+      return;
+    }
+    setIsImporting(true);
+    setSourceStatus("");
+    startImportProgress();
+    try {
+      await apiFetch("/documents/import-url", {
+        method: "POST",
+        body: JSON.stringify({ url: sourceUrl.trim() })
+      });
+      setSourceUrl("");
+      await loadDocs();
+      setSourceStatus("המקור החיצוני נוסף בהצלחה.");
+    } catch (error) {
+      setSourceStatus(error instanceof Error ? error.message : "ייבוא מקור חיצוני נכשל");
+    } finally {
+      setIsImporting(false);
+      stopImportProgress();
     }
   };
 
@@ -222,8 +295,7 @@ export default function TeacherPage() {
         {loadingConversation ? <p className="status">טוען שיחה...</p> : null}
         {messages.length === 0 && !loadingConversation ? (
           <div className="teacher-empty-state">
-            <h2>סוכן מורה</h2>
-            <p>שאלו שאלה כדי להתחיל שיחה חיה על בסיס המסמכים שבחרתם.</p>
+            <p>זה המקום ללמוד</p>
           </div>
         ) : null}
         {messages.map((message) => (
@@ -242,8 +314,61 @@ export default function TeacherPage() {
       <section className={`teacher-drawer ${isDrawerOpen ? "open" : ""}`}>
         <div className="glass stack">
           <h3>מסמכים ושיחות</h3>
-          <input type="file" multiple accept=".pdf,.txt,.md,.csv,.json" onChange={onFileChange} />
-          {uploadStatus && <p className="status">{uploadStatus}</p>}
+
+          <div className="import-section">
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.txt,.md,.csv,.json"
+              onChange={onFileChange}
+              disabled={isUploading || isImporting}
+            />
+            {isUploading && (
+              <div className="import-progress-bar">
+                <div className="import-progress-indicator">
+                  <span className="spinner-inline" />
+                  <span>מעלה מסמכים...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="import-section">
+            <input
+              placeholder="הדביקו קישור YouTube או אתר אינטרנט"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              disabled={isImporting}
+            />
+            <button
+              type="button"
+              className={isImporting ? "btn-importing" : ""}
+              onClick={importExternalSource}
+              disabled={isStreaming || isImporting}
+            >
+              {isImporting ? (
+                <span className="btn-loading-content">
+                  <span className="spinner-inline" />
+                  <span>מייבא...</span>
+                </span>
+              ) : (
+                "ייבוא מקור חיצוני"
+              )}
+            </button>
+            {isImporting && importProgress && (
+              <div className="import-progress-bar">
+                <div className="import-progress-track">
+                  <div className="import-progress-fill" />
+                </div>
+                <div className="import-progress-indicator">
+                  <span>{importProgress}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {uploadStatus && !isUploading && <p className="status">{uploadStatus}</p>}
+          {sourceStatus && !isImporting && <p className="status">{sourceStatus}</p>}
           {deleteStatus && <p className="status">{deleteStatus}</p>}
           {loadingDocs && <p className="status">טוען מסמכים...</p>}
           <div className="item-list">
@@ -267,7 +392,9 @@ export default function TeacherPage() {
                       }
                     }}
                   />
-                  <span>{doc.name}</span>
+                  <span>
+                    {doc.name} <small>({getSourceLabel(doc)})</small>
+                  </span>
                 </label>
                 <button
                   type="button"
