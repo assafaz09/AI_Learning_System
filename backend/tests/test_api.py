@@ -323,15 +323,15 @@ def test_submit_quiz_returns_detailed_feedback_text():
             headers=headers,
             json={"document_ids": [doc_id], "difficulty": "medium", "question_count": 1, "question_type": "open"},
         )
-    assert generated.status_code == 200
-    quiz_id = generated.json()["id"]
-    question_id = generated.json()["questions"][0]["id"]
+        assert generated.status_code == 200
+        quiz_id = generated.json()["id"]
+        question_id = generated.json()["questions"][0]["id"]
 
-    submitted = client.post(
-        f"/quiz/{quiz_id}/submit",
-        headers=headers,
-        json={"answers": {str(question_id): "מודל שלומד ממידע קיים ומשפר ביצועים עם הזמן."}},
-    )
+        submitted = client.post(
+            f"/quiz/{quiz_id}/submit",
+            headers=headers,
+            json={"answers": {str(question_id): "מודל שלומד ממידע קיים ומשפר ביצועים עם הזמן."}},
+        )
     assert submitted.status_code == 200
     body = submitted.json()
     assert "feedback_items" in body
@@ -444,6 +444,61 @@ def test_import_external_youtube_without_transcript_uses_audio_transcription():
     assert imported.json()["external_id"] == "abc123xyz99"
 
 
+def test_teacher_prompt_contains_pedagogical_instructions():
+    from app.prompts.teacher import TEACHER_SYSTEM_PROMPT, build_teacher_user_prompt
+
+    assert "הבנה לפני שינון" in TEACHER_SYSTEM_PROMPT
+    assert "אל תמציא מידע" in TEACHER_SYSTEM_PROMPT
+    assert "אנלוגיות" in TEACHER_SYSTEM_PROMPT
+    assert "הקשר" in TEACHER_SYSTEM_PROMPT
+    assert len(TEACHER_SYSTEM_PROMPT) > 500
+
+    prompt = build_teacher_user_prompt("מה זה ML?", ["ML is machine learning.", "It learns from data."])
+    assert "ML is machine learning." in prompt
+    assert "It learns from data." in prompt
+    assert "מה זה ML?" in prompt
+    assert "---" in prompt
+
+
+def test_quiz_prompt_contains_format_and_quality_rules():
+    from app.prompts.quiz import QUIZ_GENERATOR_SYSTEM_PROMPT, build_quiz_generation_prompt
+
+    assert "JSON תקין בלבד" in QUIZ_GENERATOR_SYSTEM_PROMPT
+    assert "4 אפשרויות" in QUIZ_GENERATOR_SYSTEM_PROMPT
+    assert "correct_answer" in QUIZ_GENERATOR_SYSTEM_PROMPT
+    assert "reference_answer" in QUIZ_GENERATOR_SYSTEM_PROMPT
+    assert "בקרת איכות" in QUIZ_GENERATOR_SYSTEM_PROMPT
+    assert len(QUIZ_GENERATOR_SYSTEM_PROMPT) > 500
+
+    mcq_prompt = build_quiz_generation_prompt("mcq", 5, "medium", "some material")
+    assert "5" in mcq_prompt
+    assert "בינוני" in mcq_prompt
+    assert "some material" in mcq_prompt
+
+    open_prompt = build_quiz_generation_prompt("open", 3, "hard", "other material")
+    assert "3" in open_prompt
+    assert "קשה" in open_prompt
+
+
+def test_grading_prompt_contains_evaluation_criteria():
+    from app.prompts.grading import QUIZ_GRADER_SYSTEM_PROMPT, build_semantic_grading_prompt
+
+    assert "סמנטית" in QUIZ_GRADER_SYSTEM_PROMPT
+    assert "90-100" in QUIZ_GRADER_SYSTEM_PROMPT
+    assert "0-24" in QUIZ_GRADER_SYSTEM_PROMPT
+    assert "accepted_semantically" in QUIZ_GRADER_SYSTEM_PROMPT
+    assert "how_to_improve" in QUIZ_GRADER_SYSTEM_PROMPT
+    assert len(QUIZ_GRADER_SYSTEM_PROMPT) > 500
+
+    prompt = build_semantic_grading_prompt("מה זה AI?", "בינה מלאכותית", "זה מחשב חכם")
+    assert "מה זה AI?" in prompt
+    assert "בינה מלאכותית" in prompt
+    assert "זה מחשב חכם" in prompt
+
+    empty_prompt = build_semantic_grading_prompt("שאלה", "תשובה", "")
+    assert "לא ניתנה תשובה" in empty_prompt
+
+
 def test_transcribe_audio_uses_local_whisper_when_configured():
     with patch("app.services.ai.settings") as mock_settings:
         mock_settings.openai_api_key = "sk-test"
@@ -473,11 +528,7 @@ def test_transcribe_audio_uses_api_when_configured():
         from app.services.ai import AIClient
 
         ai = AIClient()
-        mock_response = MagicMock()
-        mock_response.text = "api transcription result"
-        ai.client = MagicMock()
-        ai.client.audio.transcriptions.create.return_value = mock_response
-
-        result = ai.transcribe_audio("/tmp/test.mp3")
-        assert result == "api transcription result"
-        ai.client.audio.transcriptions.create.assert_called_once()
+        with patch.object(ai, "_transcribe_via_api", return_value="api transcription result") as mock_api:
+            result = ai.transcribe_audio("/tmp/test.mp3")
+            assert result == "api transcription result"
+            mock_api.assert_called_once()

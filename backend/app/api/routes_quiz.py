@@ -153,6 +153,15 @@ def _grade_with_llm(question_prompt: str, expected: str, user_answer: str) -> tu
         return score, why, improve, score >= 70
 
 
+def _serialize_expected_answer(item: dict[str, Any]) -> str:
+    if item["type"] == "mcq":
+        payload = {"type": "mcq", "correct_answer": item["correct_answer"], "options": item["options"]}
+    else:
+        payload = {"type": "open", "reference_answer": item["reference_answer"]}
+    payload["explanation"] = item.get("explanation", "")
+    return json.dumps(payload, ensure_ascii=False)
+
+
 @router.get("/{quiz_id}", response_model=QuizOut)
 def get_quiz(quiz_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id, Quiz.user_id == user.id).first()
@@ -190,25 +199,7 @@ def generate_quiz(payload: QuizGenerateRequest, db: Session = Depends(get_db), u
     db.refresh(quiz)
 
     for item in questions:
-        if item["type"] == "mcq":
-            expected = json.dumps(
-                {
-                    "type": "mcq",
-                    "correct_answer": item["correct_answer"],
-                    "options": item["options"],
-                    "explanation": item.get("explanation", ""),
-                },
-                ensure_ascii=False,
-            )
-        else:
-            expected = json.dumps(
-                {
-                    "type": "open",
-                    "reference_answer": item["reference_answer"],
-                    "explanation": item.get("explanation", ""),
-                },
-                ensure_ascii=False,
-            )
+        expected = _serialize_expected_answer(item)
         db.add(Question(quiz_id=quiz.id, prompt=item["prompt"], expected_answer=expected))
     db.commit()
     db.refresh(quiz)

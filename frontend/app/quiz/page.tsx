@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "../../lib/api";
+import { apiFetch, errorMessage } from "../../lib/api";
 
 type Doc = { id: number; name: string };
 type Quiz = {
@@ -42,7 +42,7 @@ export default function QuizPage() {
       localStorage.setItem("active_quiz_id", String(data.id));
       setStatus("השאלון נוצר בהצלחה. מוכנים לבחן את עצמך?");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "יצירת השאלון נכשלה.");
+      setStatus(errorMessage(error, "יצירת השאלון נכשלה."));
     } finally {
       setIsGenerating(false);
     }

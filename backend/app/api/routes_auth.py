@@ -24,6 +24,15 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     )
 
 
+def _issue_tokens(user_id: int, response: Response, db: Session) -> TokenResponse:
+    access_token = create_token(str(user_id), settings.jwt_access_token_expire_minutes, "access")
+    refresh_token = create_token(str(user_id), settings.jwt_refresh_token_expire_minutes, "refresh")
+    db.add(UserSession(user_id=user_id, refresh_token=refresh_token, is_active=True))
+    db.commit()
+    _set_refresh_cookie(response, refresh_token)
+    return TokenResponse(access_token=access_token)
+
+
 @router.post("/register", response_model=TokenResponse)
 def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == payload.email.lower()).first():
@@ -34,12 +43,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
     db.commit()
     db.refresh(user)
 
-    access_token = create_token(str(user.id), settings.jwt_access_token_expire_minutes, "access")
-    refresh_token = create_token(str(user.id), settings.jwt_refresh_token_expire_minutes, "refresh")
-    db.add(UserSession(user_id=user.id, refresh_token=refresh_token, is_active=True))
-    db.commit()
-    _set_refresh_cookie(response, refresh_token)
-    return TokenResponse(access_token=access_token)
+    return _issue_tokens(user.id, response, db)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -47,12 +51,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="פרטי ההתחברות שגויים")
-    access_token = create_token(str(user.id), settings.jwt_access_token_expire_minutes, "access")
-    refresh_token = create_token(str(user.id), settings.jwt_refresh_token_expire_minutes, "refresh")
-    db.add(UserSession(user_id=user.id, refresh_token=refresh_token, is_active=True))
-    db.commit()
-    _set_refresh_cookie(response, refresh_token)
-    return TokenResponse(access_token=access_token)
+    return _issue_tokens(user.id, response, db)
 
 
 @router.post("/refresh", response_model=TokenResponse)

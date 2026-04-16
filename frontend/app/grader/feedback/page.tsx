@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { apiFetch } from "../../../lib/api";
+import { apiFetch, errorMessage } from "../../../lib/api";
 
 type FeedbackItem = {
   question_id: number;
@@ -39,7 +39,7 @@ export default function FeedbackPage() {
         setStatus("");
       })
       .catch((error) => {
-        setStatus(error instanceof Error ? error.message : "טעינת המשוב נכשלה");
+        setStatus(errorMessage(error, "טעינת המשוב נכשלה"));
       });
   }, [quizId]);
 

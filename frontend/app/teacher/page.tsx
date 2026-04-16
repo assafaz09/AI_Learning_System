@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useSta
 import {
   apiFetch,
   deleteDocument,
+  errorMessage,
   getConversationMessages,
   streamTeacherChat,
   TeacherMessage,
@@ -110,7 +111,7 @@ export default function TeacherPage() {
       setMessages(data.messages);
       setCurrentConversationId(data.conversation_id);
     } catch (error) {
-      setChatStatus(error instanceof Error ? error.message : "טעינת היסטוריית השיחה נכשלה");
+      setChatStatus(errorMessage(error, "טעינת היסטוריית השיחה נכשלה"));
     } finally {
       setLoadingConversation(false);
     }
@@ -126,7 +127,7 @@ export default function TeacherPage() {
 
   useEffect(() => {
     Promise.all([loadDocs(), loadConversations()]).catch((error) => {
-      setUploadStatus(error instanceof Error ? error.message : "שגיאה בטעינת נתונים");
+      setUploadStatus(errorMessage(error, "שגיאה בטעינת נתונים"));
     });
   }, []);
 
@@ -149,7 +150,7 @@ export default function TeacherPage() {
       await loadDocs();
       setUploadStatus(`הועלו בהצלחה ${files.length} מסמכים`);
     } catch (error) {
-      setUploadStatus(error instanceof Error ? error.message : "העלאת המסמכים נכשלה");
+      setUploadStatus(errorMessage(error, "העלאת המסמכים נכשלה"));
     } finally {
       setIsUploading(false);
       e.target.value = "";
@@ -173,7 +174,7 @@ export default function TeacherPage() {
       await loadDocs();
       setSourceStatus("המקור החיצוני נוסף בהצלחה.");
     } catch (error) {
-      setSourceStatus(error instanceof Error ? error.message : "ייבוא מקור חיצוני נכשל");
+      setSourceStatus(errorMessage(error, "ייבוא מקור חיצוני נכשל"));
     } finally {
       setIsImporting(false);
       stopImportProgress();
@@ -247,7 +248,7 @@ export default function TeacherPage() {
       await loadConversations();
       setChatStatus("התקבלה תשובה");
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "שליחת השאלה נכשלה";
+      const detail = errorMessage(error, "שליחת השאלה נכשלה");
       setMessages((prev) =>
         prev.map((message) =>
           message.id === tempAssistantMessageId && !message.content
@@ -270,7 +271,7 @@ export default function TeacherPage() {
       await Promise.all([loadDocs(), loadConversations()]);
       setDeleteStatus("המסמך נמחק בהצלחה");
     } catch (error) {
-      setDeleteStatus(error instanceof Error ? error.message : "מחיקת המסמך נכשלה");
+      setDeleteStatus(errorMessage(error, "מחיקת המסמך נכשלה"));
     }
   };
 
@@ -398,7 +399,7 @@ export default function TeacherPage() {
                         await saveSelected(next);
                         setSelectionStatus("הבחירה נשמרה");
                       } catch (error) {
-                        setSelectionStatus(error instanceof Error ? error.message : "שמירת הבחירה נכשלה");
+                        setSelectionStatus(errorMessage(error, "שמירת הבחירה נכשלה"));
                       }
                     }}
                   />

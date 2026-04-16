@@ -3,14 +3,13 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr
 
 
-class RegisterRequest(BaseModel):
+class AuthCredentials(BaseModel):
     email: EmailStr
     password: str
 
 
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
+RegisterRequest = AuthCredentials
+LoginRequest = AuthCredentials
 
 
 class TokenResponse(BaseModel):

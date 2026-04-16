@@ -34,6 +34,13 @@ class AIClient:
             logger.info("Local Whisper model loaded.")
         return self._local_whisper_model
 
+    @staticmethod
+    def _build_messages(system_prompt: str, user_prompt: str) -> list[dict[str, str]]:
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
     def embed(self, text: str) -> list[float]:
         client = self._require_client()
         response = client.embeddings.create(model=settings.openai_embedding_model, input=text)
@@ -43,10 +50,7 @@ class AIClient:
         client = self._require_client()
         response = client.chat.completions.create(
             model=settings.openai_chat_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages=self._build_messages(system_prompt, user_prompt),
             temperature=0.2,
         )
         return response.choices[0].message.content or ""
@@ -55,10 +59,7 @@ class AIClient:
         client = self._require_client()
         stream = client.chat.completions.create(
             model=settings.openai_chat_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages=self._build_messages(system_prompt, user_prompt),
             temperature=0.2,
             stream=True,
         )
