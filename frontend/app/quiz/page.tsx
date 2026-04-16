@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "../../lib/api";
 
 type Doc = { id: number; name: string };
-type Quiz = { id: number; title: string; questions: { id: number; prompt: string }[] };
+type Quiz = {
+  id: number;
+  title: string;
+  questions: { id: number; prompt: string; question_type: "open" | "mcq"; options: string[] }[];
+};
 
 export default function QuizPage() {
   const router = useRouter();
@@ -14,6 +18,7 @@ export default function QuizPage() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [status, setStatus] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [questionType, setQuestionType] = useState<"open" | "mcq">("open");
 
   useEffect(() => {
     apiFetch<Doc[]>("/documents").then(setDocs).catch(() => undefined);
@@ -25,7 +30,7 @@ export default function QuizPage() {
     try {
       const data = await apiFetch<Quiz>("/quiz/generate", {
         method: "POST",
-        body: JSON.stringify({ document_ids: selected, difficulty: "medium", question_count: 5 })
+        body: JSON.stringify({ document_ids: selected, difficulty: "medium", question_count: 5, question_type: questionType })
       });
       setQuiz(data);
       localStorage.setItem("active_quiz_id", String(data.id));
@@ -64,6 +69,13 @@ export default function QuizPage() {
             {doc.name}
           </label>
         ))}
+        <label>
+          סוג שאלות
+          <select value={questionType} onChange={(e) => setQuestionType(e.target.value === "mcq" ? "mcq" : "open")}>
+            <option value="open">שאלות פתוחות</option>
+            <option value="mcq">שאלות אמריקאיות</option>
+          </select>
+        </label>
         <button onClick={generate}>צור שאלון</button>
         {status && <p className="status">{status}</p>}
       </section>

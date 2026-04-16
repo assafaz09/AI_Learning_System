@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from pathlib import Path
@@ -284,10 +285,31 @@ def test_submit_quiz_returns_detailed_feedback_text():
     register = client.post("/auth/register", json=payload)
     headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
 
+    generated_payload = {
+        "questions": [
+            {
+                "prompt": "מהי למידת מכונה?",
+                "type": "open",
+                "reference_answer": "למידת מכונה היא שיטה שבה מודל לומד מתבניות בנתונים.",
+                "explanation": "התייחס/י להגדרה ולרעיון הלמידה מנתונים.",
+            }
+        ]
+    }
+    semantic_eval_payload = {
+        "score_0_to_100": 86,
+        "why": "התשובה שלך נכונה רעיונית גם אם הניסוח שונה.",
+        "how_to_improve": "הוסף/י דוגמה קצרה לאופן שבו מודל לומד מנתונים.",
+        "accepted_semantically": True,
+    }
+
     with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
         "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
     ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
-        "app.api.routes_quiz.ai_client.chat", return_value="Q: מהי למידת מכונה?\nA: תהליך שבו מודל לומד מדוגמאות."
+        "app.api.routes_quiz.ai_client.chat",
+        side_effect=[
+            json.dumps(generated_payload, ensure_ascii=False),
+            json.dumps(semantic_eval_payload, ensure_ascii=False),
+        ],
     ):
         uploaded = client.post(
             "/documents/upload",
@@ -308,10 +330,11 @@ def test_submit_quiz_returns_detailed_feedback_text():
     submitted = client.post(
         f"/quiz/{quiz_id}/submit",
         headers=headers,
-        json={"answers": {str(question_id): "תשובה קצרה ולא מלאה"}},
+        json={"answers": {str(question_id): "מודל שלומד ממידע קיים ומשפר ביצועים עם הזמן."}},
     )
     assert submitted.status_code == 200
-    feedback = submitted.json()["feedback"]
-    assert "משוב מפורט לכל שאלה" in feedback
-    assert "למה:" in feedback
-    assert "איך לשפר:" in feedback
+    body = submitted.json()
+    assert "feedback_items" in body
+    assert body["feedback_items"][0]["accepted_semantically"] is True
+    assert body["feedback_items"][0]["why"]
+    assert body["feedback_items"][0]["how_to_improve"]

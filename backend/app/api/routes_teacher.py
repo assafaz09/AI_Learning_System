@@ -9,6 +9,7 @@ from app.api.dependencies import get_current_user
 from app.api.routes_documents import vector_store
 from app.db import get_db
 from app.models import Conversation, Document, Message, User, UserDocumentSelection
+from app.prompts import TEACHER_SYSTEM_PROMPT, build_teacher_user_prompt
 from app.schemas import TeacherChatRequest, TeacherChatResponse, TeacherConversationMessagesResponse, TeacherMessageOut
 from app.services.ai import ai_client
 
@@ -53,11 +54,7 @@ def _build_prompt(message: str, selected_ids: list[int], user_id: int) -> str:
             status_code=409,
             detail="לא נמצאו מקטעים סמנטיים למסמכים שנבחרו. יש לבצע אינדוקס מחדש או לבדוק חיבור ל-Qdrant",
         )
-    return (
-        "אתה סוכן מורה חכם. ענה רק על בסיס ההקשר שסופק לך.\n\n"
-        f"הקשר:\n{chr(10).join(contexts)}\n\n"
-        f"שאלה: {message}"
-    )
+    return build_teacher_user_prompt(message, contexts)
 
 
 @router.post("/chat", response_model=TeacherChatResponse)
@@ -67,7 +64,7 @@ def teacher_chat(payload: TeacherChatRequest, db: Session = Depends(get_db), use
 
     try:
         prompt = _build_prompt(payload.message, selected_ids, user.id)
-        answer = ai_client.chat("אתה סוכן מורה בפלטפורמת למידה מבוססת AI.", prompt)
+        answer = ai_client.chat(TEACHER_SYSTEM_PROMPT, prompt)
     except HTTPException:
         raise
     except Exception as exc:
@@ -95,7 +92,7 @@ def teacher_chat_stream(payload: TeacherChatRequest, db: Session = Depends(get_d
     def stream_events() -> Generator[str, None, None]:
         answer_parts: list[str] = []
         try:
-            for delta in ai_client.chat_stream("אתה סוכן מורה בפלטפורמת למידה מבוססת AI.", prompt):
+            for delta in ai_client.chat_stream(TEACHER_SYSTEM_PROMPT, prompt):
                 answer_parts.append(delta)
                 yield f"event: delta\ndata: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
         except Exception as exc:

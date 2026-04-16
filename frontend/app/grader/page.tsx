@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "../../lib/api";
 
-type Question = { id: number; prompt: string };
+type Question = { id: number; prompt: string; question_type: "open" | "mcq"; options: string[] };
 type Quiz = { id: number; title: string; questions: Question[] };
-type Grade = { score: number; feedback: string };
 
 export default function GraderPage() {
+  const router = useRouter();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [grade, setGrade] = useState<Grade | null>(null);
+  const [status, setStatus] = useState("");
 
   useEffect(() => {
     const quizId = localStorage.getItem("active_quiz_id");
@@ -20,11 +21,9 @@ export default function GraderPage() {
 
   const submit = async () => {
     if (!quiz) return;
-    const result = await apiFetch<Grade>(`/quiz/${quiz.id}/submit`, {
-      method: "POST",
-      body: JSON.stringify({ answers })
-    });
-    setGrade(result);
+    setStatus("בודק את התשובות...");
+    await apiFetch(`/quiz/${quiz.id}/submit`, { method: "POST", body: JSON.stringify({ answers }) });
+    router.push(`/grader/feedback?quizId=${quiz.id}`);
   };
 
   return (
@@ -35,16 +34,22 @@ export default function GraderPage() {
       {quiz?.questions.map((q) => (
         <div key={q.id} className="surface stack" style={{ gap: 8 }}>
           <p style={{ color: "var(--text)", fontWeight: 600 }}>{q.prompt}</p>
-          <textarea rows={3} onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))} />
+          {q.question_type === "mcq" ? (
+            <select onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}>
+              <option value="">בחר/י תשובה</option>
+              {q.options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <textarea rows={3} onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))} />
+          )}
         </div>
       ))}
       <button onClick={submit}>שליחה לבדיקה</button>
-      {grade && (
-        <div className="surface stack" style={{ gap: 8 }}>
-          <h3>ציון: {grade.score}</h3>
-          <p>{grade.feedback}</p>
-        </div>
-      )}
+      {status ? <p className="status">{status}</p> : null}
     </main>
   );
 }

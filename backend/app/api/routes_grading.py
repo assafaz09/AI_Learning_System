@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -23,4 +25,14 @@ def get_grade(quiz_id: int, db: Session = Depends(get_db), user: User = Depends(
     )
     if not grade:
         raise HTTPException(status_code=404, detail="לא נמצא ציון לשאלון")
-    return GradeOut(score=grade.score, feedback=grade.feedback)
+    try:
+        payload = json.loads(grade.feedback)
+        if isinstance(payload, dict):
+            return GradeOut(
+                score=grade.score,
+                feedback=str(payload.get("summary", grade.feedback)),
+                feedback_items=payload.get("items", []),
+            )
+    except Exception:
+        pass
+    return GradeOut(score=grade.score, feedback=grade.feedback, feedback_items=[])
