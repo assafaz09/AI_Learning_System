@@ -10,6 +10,7 @@ type Quiz = {
   title: string;
   questions: { id: number; prompt: string; question_type: "open" | "mcq"; options: string[] }[];
 };
+type QuizQuestionType = "open" | "mcq";
 
 export default function QuizPage() {
   const router = useRouter();
@@ -18,13 +19,18 @@ export default function QuizPage() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [status, setStatus] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [questionType, setQuestionType] = useState<"open" | "mcq">("open");
+  const [questionType, setQuestionType] = useState<QuizQuestionType | "">("");
+  const canGenerate = selected.length > 0 && questionType !== "" && !isGenerating;
 
   useEffect(() => {
     apiFetch<Doc[]>("/documents").then(setDocs).catch(() => undefined);
   }, []);
 
   const generate = async () => {
+    if (questionType === "") {
+      setStatus("בחרו קודם סוג שאלון: פתוח או אמריקאי.");
+      return;
+    }
     setIsGenerating(true);
     setStatus("מייצר שאלון...");
     try {
@@ -71,12 +77,18 @@ export default function QuizPage() {
         ))}
         <label>
           סוג שאלות
-          <select value={questionType} onChange={(e) => setQuestionType(e.target.value === "mcq" ? "mcq" : "open")}>
+          <select
+            value={questionType}
+            onChange={(e) => setQuestionType((e.target.value === "open" || e.target.value === "mcq" ? e.target.value : ""))}
+          >
+            <option value="">בחרו סוג שאלון</option>
             <option value="open">שאלות פתוחות</option>
             <option value="mcq">שאלות אמריקאיות</option>
           </select>
         </label>
-        <button onClick={generate}>צור שאלון</button>
+        <button onClick={generate} disabled={!canGenerate}>
+          צור שאלון
+        </button>
         {status && <p className="status">{status}</p>}
       </section>
       <section className="glass stack">

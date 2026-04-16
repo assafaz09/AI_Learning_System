@@ -36,7 +36,9 @@ describe("QuizPage", () => {
 
     render(<QuizPage />);
     await screen.findByText("doc.txt");
+    expect(screen.getByRole("button", { name: "צור שאלון" })).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "open" } });
     fireEvent.click(screen.getByRole("button", { name: "צור שאלון" }));
 
     expect(screen.getByText("מחולל השאלות עובד עכשיו")).toBeDefined();
@@ -46,5 +48,25 @@ describe("QuizPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "מעבר ל-בחן את עצמך" }));
     expect(pushMock).toHaveBeenCalledWith("/grader");
+  });
+
+  test("requires explicit question type before enabling generate", async () => {
+    vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+      if (path === "/documents") {
+        return [{ id: 1, name: "doc.txt" }];
+      }
+      return {};
+    });
+
+    render(<QuizPage />);
+    await screen.findByText("doc.txt");
+    const generateButton = screen.getByRole("button", { name: "צור שאלון" });
+    expect(generateButton).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(generateButton).toBeDisabled();
+
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "mcq" } });
+    expect(generateButton).not.toBeDisabled();
   });
 });

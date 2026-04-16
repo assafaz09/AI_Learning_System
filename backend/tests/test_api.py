@@ -321,7 +321,7 @@ def test_submit_quiz_returns_detailed_feedback_text():
         generated = client.post(
             "/quiz/generate",
             headers=headers,
-            json={"document_ids": [doc_id], "difficulty": "medium", "question_count": 1},
+            json={"document_ids": [doc_id], "difficulty": "medium", "question_count": 1, "question_type": "open"},
         )
     assert generated.status_code == 200
     quiz_id = generated.json()["id"]
@@ -338,3 +338,27 @@ def test_submit_quiz_returns_detailed_feedback_text():
     assert body["feedback_items"][0]["accepted_semantically"] is True
     assert body["feedback_items"][0]["why"]
     assert body["feedback_items"][0]["how_to_improve"]
+
+
+def test_generate_quiz_requires_question_type():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None):
+        uploaded = client.post(
+            "/documents/upload",
+            headers=headers,
+            files={"file": ("quiz-type-source.txt", b"source", "text/plain")},
+        )
+    assert uploaded.status_code == 200
+    doc_id = uploaded.json()["id"]
+
+    response = client.post(
+        "/quiz/generate",
+        headers=headers,
+        json={"document_ids": [doc_id], "difficulty": "medium", "question_count": 1},
+    )
+    assert response.status_code == 422

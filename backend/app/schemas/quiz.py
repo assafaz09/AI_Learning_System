@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -5,13 +7,13 @@ class QuizGenerateRequest(BaseModel):
     document_ids: list[int]
     difficulty: str = "medium"
     question_count: int = 5
-    question_type: str = "open"
+    question_type: Literal["open", "mcq"]
 
 
 class QuestionOut(BaseModel):
     id: int
     prompt: str
-    question_type: str = "open"
+    question_type: Literal["open", "mcq"] = "open"
     options: list[str] = []
 
     class Config:
