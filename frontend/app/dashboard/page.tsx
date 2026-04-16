@@ -19,7 +19,7 @@ export default function DashboardPage() {
         </article>
         <article className="glass stack">
           <h3>קיצורי דרך מהירים</h3>
-          <div className="actions">
+          <div className="actions dashboard-actions">
             <Link href="/teacher" className="action-link">פתיחת סוכן מורה</Link>
             <Link href="/quiz" className="action-link">יצירת שאלון חדש</Link>
             <Link href="/grader" className="action-link">בחן את עצמך</Link>

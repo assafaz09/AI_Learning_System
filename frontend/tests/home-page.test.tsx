@@ -9,4 +9,10 @@ describe("HomePage", () => {
     expect(screen.getByText("התחברות")).toBeDefined();
     expect(screen.getByText("הרשמה")).toBeDefined();
   });
+
+  test("renders auth links with correct destinations", () => {
+    render(<HomePage />);
+    expect(screen.getByRole("link", { name: "התחברות" }).getAttribute("href")).toBe("/login");
+    expect(screen.getByRole("link", { name: "הרשמה" }).getAttribute("href")).toBe("/register");
+  });
 });

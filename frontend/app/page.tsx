@@ -14,7 +14,7 @@ export default function HomePage() {
       <section className="grid">
         <article className="glass stack">
           <h3>איך מתחילים?</h3>
-          <div className="actions actions-two">
+          <div className="actions actions-two home-auth-actions">
           <Link href="/login" className="action-link">התחברות</Link>
           <Link href="/register" className="action-link">הרשמה</Link>
           </div>

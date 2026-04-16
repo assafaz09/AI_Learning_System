@@ -149,10 +149,50 @@ ol {
 .actions {
   display: grid;
   gap: 10px;
+  align-items: start;
+}
+
+.dashboard-actions {
+  gap: 12px;
+}
+
+.dashboard-actions .action-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: 14px;
+  padding: 12px 14px;
+  text-align: center;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .actions-two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.home-auth-actions .action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  width: 100%;
+  border-radius: 14px;
+  text-align: center;
+  line-height: 1.2;
+  padding: 12px 14px;
+  align-self: start;
+}
+
+.topbar-logout-btn {
+  width: auto;
+  min-width: 92px;
+  border-radius: 11px;
+  padding: 8px 14px;
+  line-height: 1;
 }
 
 input,
@@ -469,6 +509,10 @@ label input[type="checkbox"] {
 
   .teacher-chat-canvas {
     padding-top: 58px;
+  }
+
+  .dashboard-actions .action-link {
+    white-space: normal;
   }
 }
 

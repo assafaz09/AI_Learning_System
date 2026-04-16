@@ -60,7 +60,7 @@ export default function QuizPage() {
         </div>
       ) : null}
       <section className="glass stack">
-        <h2>סוכן מחולל שאלות</h2>
+        <h2>צור שאלון בעזרת בינה מלאכותית</h2>
         <p>בחרו מסמכים ולחצו על יצירה כדי לקבל שאלון מותאם אישי.</p>
         {docs.map((doc) => (
           <label key={doc.id} className="item-row">
