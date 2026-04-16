@@ -313,7 +313,17 @@ export default function TeacherPage() {
 
       <section className={`teacher-drawer ${isDrawerOpen ? "open" : ""}`}>
         <div className="glass stack">
-          <h3>מסמכים ושיחות</h3>
+          <div className="teacher-drawer-header">
+            <h3>מסמכים ושיחות</h3>
+            <button
+              type="button"
+              className="teacher-drawer-close"
+              onClick={() => setIsDrawerOpen(false)}
+              aria-label="סגירה"
+            >
+              &times;
+            </button>
+          </div>
 
           <div className="import-section">
             <input

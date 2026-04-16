@@ -271,6 +271,7 @@ button:hover,
 .item-list {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .item-row {
@@ -282,6 +283,7 @@ button:hover,
   background: #f6f8ff;
   border: 1px solid #e2e8f8;
   transition: transform 140ms ease, box-shadow 180ms ease;
+  min-width: 0;
 }
 
 .item-row:hover {
@@ -360,13 +362,14 @@ label input[type="checkbox"] {
 
 .teacher-doc-row {
   justify-content: space-between;
+  min-width: 0;
 }
 
 .teacher-doc-checkbox {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -378,11 +381,16 @@ label input[type="checkbox"] {
 
 .teacher-delete-btn {
   width: auto;
+  min-width: fit-content;
   padding: 8px 10px;
+  flex-shrink: 0;
 }
 
 .teacher-conversation-btn {
   text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .teacher-conversation-btn.active {
@@ -487,7 +495,7 @@ label input[type="checkbox"] {
   bottom: 0;
   inset-inline-start: -420px;
   width: min(420px, 90vw);
-  z-index: 12;
+  z-index: 40;
   padding: 18px;
   transition: inset-inline-start 220ms ease;
 }
@@ -498,7 +506,54 @@ label input[type="checkbox"] {
 
 .teacher-drawer .glass {
   height: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.teacher-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.teacher-drawer-header h3 {
+  margin: 0;
+}
+
+.teacher-drawer-close {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 1.3rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  border: 1px solid var(--border);
+}
+
+.teacher-drawer-close:hover {
+  background: #fee2e2;
+  color: var(--danger);
+  border-color: #fecaca;
+}
+
+.teacher-drawer .stack {
+  min-width: 0;
+}
+
+.teacher-drawer input,
+.teacher-drawer button {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.teacher-drawer input[type="file"] {
+  overflow: hidden;
 }
 
 @media (max-width: 700px) {
@@ -613,6 +668,8 @@ label input[type="checkbox"] {
 .import-section {
   display: grid;
   gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .import-progress-bar {
