@@ -277,3 +277,41 @@ def test_teacher_chat_stream_returns_deltas_and_persists_messages():
     roles = [item["role"] for item in messages.json()["messages"]]
     assert "user" in roles
     assert "assistant" in roles
+
+
+def test_submit_quiz_returns_detailed_feedback_text():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
+        "app.api.routes_quiz.ai_client.chat", return_value="Q: מהי למידת מכונה?\nA: תהליך שבו מודל לומד מדוגמאות."
+    ):
+        uploaded = client.post(
+            "/documents/upload",
+            headers=headers,
+            files={"file": ("quiz-feedback.txt", b"ML content", "text/plain")},
+        )
+        assert uploaded.status_code == 200
+        doc_id = uploaded.json()["id"]
+        generated = client.post(
+            "/quiz/generate",
+            headers=headers,
+            json={"document_ids": [doc_id], "difficulty": "medium", "question_count": 1},
+        )
+    assert generated.status_code == 200
+    quiz_id = generated.json()["id"]
+    question_id = generated.json()["questions"][0]["id"]
+
+    submitted = client.post(
+        f"/quiz/{quiz_id}/submit",
+        headers=headers,
+        json={"answers": {str(question_id): "תשובה קצרה ולא מלאה"}},
+    )
+    assert submitted.status_code == 200
+    feedback = submitted.json()["feedback"]
+    assert "משוב מפורט לכל שאלה" in feedback
+    assert "למה:" in feedback
+    assert "איך לשפר:" in feedback

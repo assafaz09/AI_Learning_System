@@ -29,8 +29,8 @@ export default function GraderPage() {
 
   return (
     <main className="glass stack">
-      <h2>סוכן בודק</h2>
-      <p>ענו על השאלות שיצרתם ושלחו לבדיקה אוטומטית עם פידבק מיידי.</p>
+      <h2>בחן את עצמך</h2>
+      <p>ענו על השאלות שיצרתם ושלחו לבדיקה אוטומטית עם משוב מפורט לשיפור אמיתי.</p>
       {!quiz && <p className="status">קודם צריך ליצור שאלון.</p>}
       {quiz?.questions.map((q) => (
         <div key={q.id} className="surface stack" style={{ gap: 8 }}>

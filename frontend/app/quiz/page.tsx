@@ -1,23 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "../../lib/api";
 
 type Doc = { id: number; name: string };
-type Question = { id: number; prompt: string };
-type Quiz = { id: number; title: string; questions: Question[] };
+type Quiz = { id: number; title: string; questions: { id: number; prompt: string }[] };
 
 export default function QuizPage() {
+  const router = useRouter();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [status, setStatus] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     apiFetch<Doc[]>("/documents").then(setDocs).catch(() => undefined);
   }, []);
 
   const generate = async () => {
+    setIsGenerating(true);
     setStatus("מייצר שאלון...");
     try {
       const data = await apiFetch<Quiz>("/quiz/generate", {
@@ -26,14 +29,25 @@ export default function QuizPage() {
       });
       setQuiz(data);
       localStorage.setItem("active_quiz_id", String(data.id));
-      setStatus("השאלון נוצר בהצלחה.");
+      setStatus("השאלון נוצר בהצלחה. מוכנים לבחן את עצמך?");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "יצירת השאלון נכשלה.");
+    } finally {
+      setIsGenerating(false);
     }
   };
 
   return (
-    <main className="grid">
+    <main className="grid quiz-page">
+      {isGenerating ? (
+        <div className="fullscreen-loader" role="status" aria-live="polite">
+          <div className="fullscreen-loader-card">
+            <div className="spinner-ring" />
+            <h3>מחולל השאלות עובד עכשיו</h3>
+            <p>אנחנו מנתחים את החומר שלך ובונים שאלון מותאם אישית.</p>
+          </div>
+        </div>
+      ) : null}
       <section className="glass stack">
         <h2>סוכן מחולל שאלות</h2>
         <p>בחרו מסמכים ולחצו על יצירה כדי לקבל שאלון מותאם אישי.</p>
@@ -54,12 +68,14 @@ export default function QuizPage() {
         {status && <p className="status">{status}</p>}
       </section>
       <section className="glass stack">
-        <h3>שאלות שנוצרו</h3>
-        <ul className="item-list">
-          {quiz?.questions.map((q) => (
-            <li key={q.id} className="surface">{q.prompt}</li>
-          )) || <li className="surface">עדיין לא נוצר שאלון</li>}
-        </ul>
+        <h3>השלב הבא</h3>
+        {!quiz ? <p className="surface">אחרי יצירת השאלון תוכלו לעבור לעמוד בחן את עצמך.</p> : null}
+        {quiz ? (
+          <div className="surface stack" style={{ gap: 10 }}>
+            <p>השאלון מוכן. רוצים להתחיל לענות ולקבל משוב מפורט?</p>
+            <button onClick={() => router.push("/grader")}>מעבר ל-בחן את עצמך</button>
+          </div>
+        ) : null}
       </section>
     </main>
   );

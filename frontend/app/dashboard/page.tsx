@@ -22,7 +22,7 @@ export default function DashboardPage() {
           <div className="actions">
             <Link href="/teacher" className="action-link">פתיחת סוכן מורה</Link>
             <Link href="/quiz" className="action-link">יצירת שאלון חדש</Link>
-            <Link href="/grader" className="action-link">בדיקת תשובות</Link>
+            <Link href="/grader" className="action-link">בחן את עצמך</Link>
           </div>
         </article>
       </section>

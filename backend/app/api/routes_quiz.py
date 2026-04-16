@@ -69,7 +69,7 @@ def submit_quiz(quiz_id: int, payload: QuizSubmitRequest, db: Session = Depends(
         raise HTTPException(status_code=400, detail="לשאלון אין שאלות")
 
     score_acc = 0.0
-    feedback_items = []
+    feedback_items: list[str] = []
     for question in questions:
         user_answer = payload.answers.get(question.id, "")
         db.add(Answer(question_id=question.id, user_id=user.id, answer_text=user_answer))
@@ -79,11 +79,39 @@ def submit_quiz(quiz_id: int, payload: QuizSubmitRequest, db: Session = Depends(
         max_tokens = max(len(expected_tokens), 1)
         q_score = min(1.0, overlap / max_tokens)
         score_acc += q_score
-        feedback_items.append(f"שאלה {question.id}: התאמה של {round(q_score * 100)}%")
+        if q_score >= 0.8:
+            why = "ענית בצורה מדויקת וכיסית את רוב הרעיונות המרכזיים."
+            improve = "כדי להשתפר עוד, נסח/י את ההסבר עם דוגמה קונקרטית מהמסמך."
+        elif q_score >= 0.45:
+            why = "יש בסיס נכון, אבל חלק מהנקודות החשובות לא הופיעו בתשובה."
+            missing = " ".join(list(expected_tokens.difference(answer_tokens))[:6])
+            improve = (
+                f"כדאי להוסיף בתשובה את המושגים: {missing}."
+                if missing
+                else "כדאי להרחיב את התשובה ולפרט יותר את הקשר בין המושגים."
+            )
+        else:
+            why = "התשובה כללית מדי ולא משקפת את הרעיונות העיקריים של החומר."
+            improve = "חזר/י למסמך, זהה/י 2-3 מונחי מפתח, ובנה/י תשובה לפי: הגדרה -> הסבר -> דוגמה."
+
+        feedback_items.append(
+            (
+                f"שאלה {question.id} ({round(q_score * 100)}%):\n"
+                f"- מה ענית: {user_answer or 'לא ניתנה תשובה'}\n"
+                f"- מה היה מצופה: {question.expected_answer}\n"
+                f"- למה: {why}\n"
+                f"- איך לשפר: {improve}"
+            )
+        )
     db.commit()
 
     final_score = round((score_acc / len(questions)) * 100, 2)
-    feedback = "; ".join(feedback_items)
+    feedback = (
+        f"ציון כולל: {final_score}\n\n"
+        "משוב מפורט לכל שאלה:\n"
+        + "\n\n".join(feedback_items)
+        + "\n\nהמלצה כללית: לפני הגשה, עברו על מונחי המפתח בכל שאלה ובדקו שהתשובה מכסה אותם."
+    )
     db.add(Grade(quiz_id=quiz.id, user_id=user.id, score=final_score, feedback=feedback))
     db.commit()
     return GradeOut(score=final_score, feedback=feedback)

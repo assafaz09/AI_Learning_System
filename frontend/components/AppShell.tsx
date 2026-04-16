@@ -48,7 +48,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     { href: "/dashboard", label: "דשבורד" },
     { href: "/teacher", label: "סוכן מורה" },
     { href: "/quiz", label: "מחולל שאלות" },
-    { href: "/grader", label: "בודק תשובות" },
+    { href: "/grader", label: "בחן את עצמך" },
     { href: "/history", label: "היסטוריה" },
   ];
 
