@@ -6,7 +6,7 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from app.core.config import settings
+from app.core.config import ChatModelTask, settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,19 +46,21 @@ class AIClient:
         response = client.embeddings.create(model=settings.openai_embedding_model, input=text)
         return response.data[0].embedding
 
-    def chat(self, system_prompt: str, user_prompt: str) -> str:
+    def chat(self, system_prompt: str, user_prompt: str, *, task: ChatModelTask = "default") -> str:
         client = self._require_client()
         response = client.chat.completions.create(
-            model=settings.openai_chat_model,
+            model=settings.resolve_chat_model(task),
             messages=self._build_messages(system_prompt, user_prompt),
             temperature=0.2,
         )
         return response.choices[0].message.content or ""
 
-    def chat_stream(self, system_prompt: str, user_prompt: str) -> Generator[str, None, None]:
+    def chat_stream(
+        self, system_prompt: str, user_prompt: str, *, task: ChatModelTask = "default"
+    ) -> Generator[str, None, None]:
         client = self._require_client()
         stream = client.chat.completions.create(
-            model=settings.openai_chat_model,
+            model=settings.resolve_chat_model(task),
             messages=self._build_messages(system_prompt, user_prompt),
             temperature=0.2,
             stream=True,

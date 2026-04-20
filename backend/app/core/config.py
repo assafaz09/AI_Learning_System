@@ -1,4 +1,8 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ChatModelTask = Literal["teacher", "project_ideas", "quiz_generate", "quiz_grade", "podcast", "default"]
 
 
 class Settings(BaseSettings):
@@ -13,6 +17,12 @@ class Settings(BaseSettings):
     cors_allow_origins: str = "http://localhost:3000"
     openai_api_key: str = ""
     openai_chat_model: str = "gpt-4o-mini"
+    # Per-task chat models (optional). Empty = use openai_chat_model for that task.
+    openai_model_teacher: str = ""
+    openai_model_project_ideas: str = ""
+    openai_model_quiz_generate: str = ""
+    openai_model_quiz_grade: str = ""
+    openai_model_podcast: str = ""
     openai_embedding_model: str = "text-embedding-3-small"
     openai_transcription_model: str = "whisper-1"
     openai_tts_model: str = "tts-1"
@@ -38,6 +48,18 @@ class Settings(BaseSettings):
     langsmith_endpoint: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    def resolve_chat_model(self, task: ChatModelTask = "default") -> str:
+        per_task = {
+            "teacher": self.openai_model_teacher,
+            "project_ideas": self.openai_model_project_ideas,
+            "quiz_generate": self.openai_model_quiz_generate,
+            "quiz_grade": self.openai_model_quiz_grade,
+            "podcast": self.openai_model_podcast,
+            "default": "",
+        }
+        chosen = (per_task.get(task) or "").strip()
+        return chosen or self.openai_chat_model
 
 
 settings = Settings()

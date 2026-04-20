@@ -22,7 +22,7 @@ from app.prompts import (
 
 def teacher_llm_reply(state: AgentGraphState) -> dict:
     user_prompt = state.get("teacher_user_prompt") or ""
-    llm = get_chat_model(streaming=False)
+    llm = get_chat_model(task="teacher", streaming=False)
     msg = llm.invoke(
         [SystemMessage(content=TEACHER_SYSTEM_PROMPT), HumanMessage(content=user_prompt)],
     )
@@ -32,7 +32,7 @@ def teacher_llm_reply(state: AgentGraphState) -> dict:
 
 def project_ideas_llm_reply(state: AgentGraphState) -> dict:
     user_prompt = state.get("project_ideas_user_prompt") or ""
-    llm = get_chat_model(streaming=False)
+    llm = get_chat_model(task="project_ideas", streaming=False)
     msg = llm.invoke(
         [SystemMessage(content=PROJECT_IDEAS_SYSTEM_PROMPT), HumanMessage(content=user_prompt)],
     )
@@ -46,7 +46,7 @@ def quiz_generation_llm(state: AgentGraphState) -> dict:
     difficulty = state.get("difficulty") or "medium"
     material = state.get("joined_doc_excerpt") or ""
     user_prompt = build_quiz_generation_prompt(q_type, count, difficulty, material)
-    llm = get_chat_model(streaming=False)
+    llm = get_chat_model(task="quiz_generate", streaming=False)
     msg = llm.invoke(
         [SystemMessage(content=QUIZ_GENERATOR_SYSTEM_PROMPT), HumanMessage(content=user_prompt)],
     )
@@ -59,7 +59,7 @@ def open_question_grade_llm(state: AgentGraphState) -> dict:
     expected = state.get("reference_answer") or ""
     actual = state.get("user_answer") or ""
     evaluation_prompt = build_semantic_grading_prompt(q_prompt, expected, actual)
-    llm = get_chat_model(streaming=False)
+    llm = get_chat_model(task="quiz_grade", streaming=False)
     msg = llm.invoke(
         [SystemMessage(content=QUIZ_GRADER_SYSTEM_PROMPT), HumanMessage(content=evaluation_prompt)],
     )
@@ -93,7 +93,7 @@ def open_question_grade_llm(state: AgentGraphState) -> dict:
 def podcast_script_llm(state: AgentGraphState) -> dict:
     content = state.get("doc_content") or ""
     user_prompt = build_podcast_user_prompt(content)
-    llm = get_chat_model(streaming=False, temperature=0.3)
+    llm = get_chat_model(task="podcast", streaming=False, temperature=0.3)
     msg = llm.invoke(
         [SystemMessage(content=PODCAST_SYSTEM_PROMPT), HumanMessage(content=user_prompt)],
     )

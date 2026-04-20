@@ -102,7 +102,7 @@ def teacher_retrieval_phase(
 
 def iter_teacher_reply_stream(state: AgentGraphState) -> Iterator[str]:
     user_prompt = state.get("teacher_user_prompt") or ""
-    llm = get_chat_model(streaming=True)
+    llm = get_chat_model(task="teacher", streaming=True)
     for chunk in llm.stream([SystemMessage(content=TEACHER_SYSTEM_PROMPT), HumanMessage(content=user_prompt)]):
         content: Any = getattr(chunk, "content", None)
         if isinstance(content, str) and content:
