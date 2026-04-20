@@ -46,7 +46,7 @@ def test_end_to_end_learning_flow():
     ), patch(
         "app.api.routes_teacher.vector_store.search", return_value=["Gradient descent optimizes iteratively."]
     ), patch("app.services.ai.ai_client.embed", side_effect=_mock_embed), patch(
-        "app.agents.llm.get_chat_model", return_value=_e2e_chat_model()
+        "app.agents.nodes.llm_nodes.get_chat_model", return_value=_e2e_chat_model()
     ):
         uploaded = client.post(
             "/documents/upload",
@@ -70,7 +70,7 @@ def test_end_to_end_learning_flow():
     assert selected.status_code == 200
 
     with patch("app.services.ai.ai_client.embed", side_effect=_mock_embed), patch(
-        "app.agents.llm.get_chat_model", return_value=_e2e_chat_model()
+        "app.agents.nodes.llm_nodes.get_chat_model", return_value=_e2e_chat_model()
     ):
         teacher = client.post(
             "/teacher/chat",
@@ -79,7 +79,7 @@ def test_end_to_end_learning_flow():
         )
     assert teacher.status_code == 200
 
-    with patch("app.agents.llm.get_chat_model", return_value=_e2e_chat_model()):
+    with patch("app.agents.nodes.llm_nodes.get_chat_model", return_value=_e2e_chat_model()):
         quiz = client.post(
             "/quiz/generate",
             headers=headers,
@@ -91,7 +91,7 @@ def test_end_to_end_learning_flow():
     assert len(questions) > 0
 
     answers = {question["id"]: "Gradient descent optimizes model parameters iteratively." for question in questions}
-    with patch("app.agents.llm.get_chat_model", return_value=_e2e_chat_model()):
+    with patch("app.agents.nodes.llm_nodes.get_chat_model", return_value=_e2e_chat_model()):
         grade = client.post(f"/quiz/{quiz_id}/submit", headers=headers, json={"answers": answers})
     assert grade.status_code == 200
     assert "score" in grade.json()

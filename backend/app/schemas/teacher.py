@@ -12,6 +12,7 @@ class TeacherChatRequest(BaseModel):
 class TeacherChatResponse(BaseModel):
     conversation_id: int
     answer: str
+    from_cache: bool = False
 
 
 class TeacherMessageOut(BaseModel):

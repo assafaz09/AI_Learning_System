@@ -18,3 +18,5 @@ def test_alembic_upgrade_reaches_head_on_sqlite(tmp_path: Path) -> None:
     lp_cols = {c["name"] for c in insp.get_columns("learning_projects")}
     assert "source" in lp_cols
     assert "importance" in lp_cols
+    msg_cols = {c["name"] for c in insp.get_columns("messages")}
+    assert "document_scope_json" in msg_cols

@@ -195,7 +195,7 @@ def test_conversation_messages_requires_ownership_and_keeps_order():
     ), patch(
         "app.api.routes_teacher.vector_store.search", return_value=["Chunk context"]
     ), patch(
-        "app.agents.llm.get_chat_model", return_value=_mock_chat_model_invoke("תשובה ראשונה")
+        "app.agents.nodes.llm_nodes.get_chat_model", return_value=_mock_chat_model_invoke("תשובה ראשונה")
     ):
         uploaded = client.post(
             "/documents/upload",
@@ -268,7 +268,7 @@ def test_teacher_chat_stream_returns_deltas_and_persists_messages():
     ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
         "app.services.ai.ai_client.embed", side_effect=_mock_embed
     ), patch("app.api.routes_teacher.vector_store.search", return_value=["Chunk context"]), patch(
-        "app.agents.llm.get_chat_model", return_value=_mock_chat_model_stream(["שלום", " עולם"])
+        "app.agents.graphs.teacher.get_chat_model", return_value=_mock_chat_model_stream(["שלום", " עולם"])
     ):
         uploaded = client.post(
             "/documents/upload",
@@ -313,7 +313,7 @@ def test_teacher_project_ideas_returns_suggestions():
     ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
         "app.services.ai.ai_client.embed", side_effect=_mock_embed
     ), patch("app.api.routes_teacher.vector_store.search", return_value=["Context chunk"]), patch(
-        "app.agents.llm.get_chat_model",
+        "app.agents.nodes.llm_nodes.get_chat_model",
         return_value=_mock_chat_model_invoke("1. פרויקט לדוגמה\nתיאור קצר."),
     ):
         uploaded = client.post(
@@ -454,7 +454,7 @@ def test_submit_quiz_returns_detailed_feedback_text():
     with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
         "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
     ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
-        "app.agents.llm.get_chat_model", return_value=mock_llm
+        "app.agents.nodes.llm_nodes.get_chat_model", return_value=mock_llm
     ):
         uploaded = client.post(
             "/documents/upload",

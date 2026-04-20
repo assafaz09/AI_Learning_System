@@ -18,6 +18,11 @@ from app.agents.graphs.teacher import (
     teacher_retrieval_phase,
 )
 from app.agents.tracing import graph_run_metadata
+from app.services.teacher_repeat_cache import (
+    document_scope_json,
+    find_prior_teacher_answer,
+    normalize_teacher_message,
+)
 from app.schemas import (
     ProjectIdeasRequest,
     ProjectIdeasResponse,
@@ -77,6 +82,21 @@ def _resolve_conversation(payload: TeacherChatRequest, db: Session, user: User) 
 def teacher_chat(payload: TeacherChatRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     selected_ids = _resolve_selected_documents(payload, db, user)
     conversation = _resolve_conversation(payload, db, user)
+    scope_json = document_scope_json(selected_ids)
+    norm_q = normalize_teacher_message(payload.message)
+    cached = find_prior_teacher_answer(db, conversation.id, norm_q, scope_json)
+    if cached is not None:
+        db.add(
+            Message(
+                conversation_id=conversation.id,
+                role="user",
+                content=payload.message,
+                document_scope_json=scope_json,
+            )
+        )
+        db.add(Message(conversation_id=conversation.id, role="assistant", content=cached))
+        db.commit()
+        return TeacherChatResponse(conversation_id=conversation.id, answer=cached, from_cache=True)
 
     try:
         cfg = RunnableConfig(tags=["teacher", "chat"], metadata=graph_run_metadata("teacher_chat"))
@@ -93,17 +113,44 @@ def teacher_chat(payload: TeacherChatRequest, db: Session = Depends(get_db), use
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"שגיאת חיבור ל-LLM: {exc}") from exc
 
-    db.add(Message(conversation_id=conversation.id, role="user", content=payload.message))
+    db.add(
+        Message(
+            conversation_id=conversation.id,
+            role="user",
+            content=payload.message,
+            document_scope_json=scope_json,
+        )
+    )
     db.add(Message(conversation_id=conversation.id, role="assistant", content=answer))
     db.commit()
 
-    return TeacherChatResponse(conversation_id=conversation.id, answer=answer)
+    return TeacherChatResponse(conversation_id=conversation.id, answer=answer, from_cache=False)
 
 
 @router.post("/chat/stream")
 def teacher_chat_stream(payload: TeacherChatRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     selected_ids = _resolve_selected_documents(payload, db, user)
     conversation = _resolve_conversation(payload, db, user)
+    scope_json = document_scope_json(selected_ids)
+    norm_q = normalize_teacher_message(payload.message)
+    cached = find_prior_teacher_answer(db, conversation.id, norm_q, scope_json)
+
+    def stream_cached() -> Generator[str, None, None]:
+        yield f"event: delta\ndata: {json.dumps({'delta': cached}, ensure_ascii=False)}\n\n"
+        db.add(
+            Message(
+                conversation_id=conversation.id,
+                role="user",
+                content=payload.message,
+                document_scope_json=scope_json,
+            )
+        )
+        db.add(Message(conversation_id=conversation.id, role="assistant", content=cached))
+        db.commit()
+        yield f"event: done\ndata: {json.dumps({'conversation_id': conversation.id, 'from_cache': True}, ensure_ascii=False)}\n\n"
+
+    if cached is not None:
+        return StreamingResponse(stream_cached(), media_type="text/event-stream")
 
     try:
         merged = teacher_retrieval_phase(
@@ -116,7 +163,7 @@ def teacher_chat_stream(payload: TeacherChatRequest, db: Session = Depends(get_d
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"שגיאת חיבור ל-LLM: {exc}") from exc
 
-    def stream_events() -> Generator[str, None, None]:
+    def stream_live() -> Generator[str, None, None]:
         answer_parts: list[str] = []
         try:
             for delta in iter_teacher_reply_stream(merged):
@@ -129,12 +176,19 @@ def teacher_chat_stream(payload: TeacherChatRequest, db: Session = Depends(get_d
         answer = "".join(answer_parts).strip()
         if not answer:
             answer = "לא התקבלה תשובה מהמודל."
-        db.add(Message(conversation_id=conversation.id, role="user", content=payload.message))
+        db.add(
+            Message(
+                conversation_id=conversation.id,
+                role="user",
+                content=payload.message,
+                document_scope_json=scope_json,
+            )
+        )
         db.add(Message(conversation_id=conversation.id, role="assistant", content=answer))
         db.commit()
-        yield f"event: done\ndata: {json.dumps({'conversation_id': conversation.id}, ensure_ascii=False)}\n\n"
+        yield f"event: done\ndata: {json.dumps({'conversation_id': conversation.id, 'from_cache': False}, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(stream_events(), media_type="text/event-stream")
+    return StreamingResponse(stream_live(), media_type="text/event-stream")
 
 
 @router.post("/project-ideas", response_model=ProjectIdeasResponse)
