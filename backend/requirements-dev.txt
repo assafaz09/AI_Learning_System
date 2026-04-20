@@ -1,0 +1,3 @@
+-r requirements.txt
+# Align CLI + langgraph_api + runtime-inmem (older combos raise ImportError: feature_flags / thread_ttl).
+langgraph-cli[inmem]>=0.4.20

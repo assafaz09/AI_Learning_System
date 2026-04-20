@@ -2,29 +2,18 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from langchain_core.runnables import RunnableConfig
 from sqlalchemy.orm import Session
 
+from app.agents.graphs.quiz import invoke_open_grade, invoke_quiz_generate
+from app.agents.quiz_utils import normalize_question_type
+from app.agents.tracing import graph_run_metadata
 from app.api.dependencies import get_current_user
 from app.db import get_db
 from app.models import Answer, Document, Grade, Question, Quiz, User
-from app.prompts import (
-    QUIZ_GENERATOR_SYSTEM_PROMPT,
-    QUIZ_GRADER_SYSTEM_PROMPT,
-    build_quiz_generation_prompt,
-    build_semantic_grading_prompt,
-)
 from app.schemas import GradeOut, QuizGenerateRequest, QuizOut, QuizSubmitRequest
-from app.services.ai import ai_client
-
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
-
-
-def _normalize_question_type(value: str) -> str:
-    normalized = value.strip().lower()
-    if normalized in {"mcq", "multiple_choice", "american", "אמריקאית"}:
-        return "mcq"
-    return "open"
 
 
 def _extract_question_payload(question: Question) -> dict[str, Any]:
@@ -47,112 +36,6 @@ def _to_question_out(question: Question) -> dict[str, Any]:
     }
 
 
-def _fallback_questions(question_type: str, question_count: int) -> list[dict[str, Any]]:
-    fallback: list[dict[str, Any]] = []
-    for idx in range(1, question_count + 1):
-        if question_type == "mcq":
-            options = ["אפשרות א", "אפשרות ב", "אפשרות ג", "אפשרות ד"]
-            fallback.append(
-                {
-                    "prompt": f"מהו הרעיון המרכזי בנושא {idx}?",
-                    "type": "mcq",
-                    "options": options,
-                    "correct_answer": options[0],
-                    "explanation": "חפשו את ההגדרה המדויקת והקשר שלה לחומר.",
-                }
-            )
-        else:
-            fallback.append(
-                {
-                    "prompt": f"הסבר/י בקצרה את הנושא המרכזי מספר {idx}.",
-                    "type": "open",
-                    "reference_answer": "הנושא המרכזי הוא ...",
-                    "explanation": "שלבו הגדרה, הסבר קצר ודוגמה.",
-                }
-            )
-    return fallback
-
-
-def _validate_generated_questions(items: list[dict[str, Any]], question_type: str, question_count: int) -> list[dict[str, Any]]:
-    validated: list[dict[str, Any]] = []
-    for item in items:
-        prompt = str(item.get("prompt", "")).strip()
-        q_type = _normalize_question_type(str(item.get("type", question_type)))
-        if not prompt:
-            continue
-
-        if q_type == "mcq":
-            options = item.get("options", [])
-            if not isinstance(options, list):
-                continue
-            clean_options = [str(option).strip() for option in options if str(option).strip()]
-            deduped: list[str] = []
-            for option in clean_options:
-                if option not in deduped:
-                    deduped.append(option)
-            correct_answer = str(item.get("correct_answer", "")).strip()
-            if len(deduped) != 4 or correct_answer not in deduped:
-                continue
-            validated.append(
-                {
-                    "prompt": prompt,
-                    "type": "mcq",
-                    "options": deduped,
-                    "correct_answer": correct_answer,
-                    "explanation": str(item.get("explanation", "")).strip(),
-                }
-            )
-        else:
-            reference = str(item.get("reference_answer", "")).strip()
-            if not reference:
-                continue
-            validated.append(
-                {
-                    "prompt": prompt,
-                    "type": "open",
-                    "reference_answer": reference,
-                    "explanation": str(item.get("explanation", "")).strip(),
-                }
-            )
-        if len(validated) >= question_count:
-            break
-    return validated
-
-
-def _heuristic_grade(expected: str, actual: str) -> tuple[float, str, str]:
-    expected_tokens = {token for token in expected.lower().split() if token}
-    actual_tokens = {token for token in actual.lower().split() if token}
-    overlap = len(expected_tokens.intersection(actual_tokens))
-    ratio = overlap / max(len(expected_tokens), 1)
-    score = round(min(1.0, ratio) * 100, 2)
-    if score >= 80:
-        why = "התשובה מכסה רעיונות מרכזיים באופן ברור."
-        improve = "כדי לשפר, הוסף/י דוגמה קצרה שתמחיש את הרעיון."
-    elif score >= 45:
-        why = "יש כיוון נכון, אך חסרות נקודות מהותיות."
-        improve = "חזק/י את התשובה עם מונחי מפתח והסבר הקשר ביניהם."
-    else:
-        why = "התשובה כללית מדי ולא מכסה את לב השאלה."
-        improve = "עבר/י על ההגדרה המרכזית ואז נסח/י תשובה בשלושה שלבים: הגדרה, הסבר, דוגמה."
-    return score, why, improve
-
-
-def _grade_with_llm(question_prompt: str, expected: str, user_answer: str) -> tuple[float, str, str, bool]:
-    evaluation_prompt = build_semantic_grading_prompt(question_prompt, expected, user_answer)
-    try:
-        raw = ai_client.chat(QUIZ_GRADER_SYSTEM_PROMPT, evaluation_prompt)
-        parsed = json.loads(raw)
-        score = float(parsed.get("score_0_to_100", 0))
-        score = max(0.0, min(100.0, score))
-        why = str(parsed.get("why", "")).strip() or "התשובה הוערכה סמנטית ביחס לחומר."
-        improve = str(parsed.get("how_to_improve", "")).strip() or "הרחב/י מעט את ההסבר והוסף/י דוגמה."
-        accepted = bool(parsed.get("accepted_semantically", score >= 70))
-        return score, why, improve, accepted
-    except Exception:
-        score, why, improve = _heuristic_grade(expected, user_answer)
-        return score, why, improve, score >= 70
-
-
 def _serialize_expected_answer(item: dict[str, Any]) -> str:
     if item["type"] == "mcq":
         payload = {"type": "mcq", "correct_answer": item["correct_answer"], "options": item["options"]}
@@ -160,6 +43,23 @@ def _serialize_expected_answer(item: dict[str, Any]) -> str:
         payload = {"type": "open", "reference_answer": item["reference_answer"]}
     payload["explanation"] = item.get("explanation", "")
     return json.dumps(payload, ensure_ascii=False)
+
+
+def _grade_with_llm(question_prompt: str, expected: str, user_answer: str) -> tuple[float, str, str, bool]:
+    cfg = RunnableConfig(tags=["quiz", "grade_open"], metadata=graph_run_metadata("quiz_grade_open"))
+    out = invoke_open_grade(
+        {
+            "question_prompt": question_prompt,
+            "reference_answer": expected,
+            "user_answer": user_answer,
+        },
+        config=cfg,
+    )
+    score = float(out.get("grade_score") or 0.0)
+    why = str(out.get("grade_why") or "")
+    improve = str(out.get("grade_improve") or "")
+    accepted = bool(out.get("grade_accepted"))
+    return score, why, improve, accepted
 
 
 @router.get("/{quiz_id}", response_model=QuizOut)
@@ -175,21 +75,20 @@ def generate_quiz(payload: QuizGenerateRequest, db: Session = Depends(get_db), u
     docs = db.query(Document).filter(Document.user_id == user.id, Document.id.in_(payload.document_ids)).all()
     if not docs:
         raise HTTPException(status_code=400, detail="לא נבחרו מסמכים")
-    question_type = _normalize_question_type(payload.question_type)
+    question_type = normalize_question_type(payload.question_type)
     joined = "\n".join(doc.content[:1000] for doc in docs)
-    prompt = build_quiz_generation_prompt(question_type, payload.question_count, payload.difficulty, joined)
     try:
-        raw = ai_client.chat(QUIZ_GENERATOR_SYSTEM_PROMPT, prompt)
-        parsed = json.loads(raw)
-        raw_questions = parsed.get("questions", []) if isinstance(parsed, dict) else []
-        if not isinstance(raw_questions, list):
-            raw_questions = []
-        questions = _validate_generated_questions(raw_questions, question_type, payload.question_count)
-        if len(questions) < payload.question_count:
-            questions.extend(_fallback_questions(question_type, payload.question_count - len(questions)))
-        questions = questions[: payload.question_count]
-    except json.JSONDecodeError:
-        questions = _fallback_questions(question_type, payload.question_count)
+        cfg = RunnableConfig(tags=["quiz", "generate"], metadata=graph_run_metadata("quiz_generate"))
+        out = invoke_quiz_generate(
+            {
+                "question_type": question_type,
+                "question_count": payload.question_count,
+                "difficulty": payload.difficulty,
+                "joined_doc_excerpt": joined,
+            },
+            config=cfg,
+        )
+        questions = out.get("validated_questions") or []
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"שגיאת חיבור ל-LLM: {exc}") from exc
 

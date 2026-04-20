@@ -6,11 +6,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from httpx import Timeout, get
+from langchain_core.runnables import RunnableConfig
 from pypdf import PdfReader
 from sqlalchemy.orm import Session
 from yt_dlp import YoutubeDL
 from youtube_transcript_api import YouTubeTranscriptApi
 
+from app.agents.graphs.documents import invoke_document_index
+from app.agents.tracing import graph_run_metadata
 from app.api.dependencies import get_current_user
 from app.core.config import settings
 from app.db import get_db
@@ -114,16 +117,17 @@ def _extract_youtube_text(url: str) -> tuple[str, str, str]:
 
 
 def index_document_chunks(user_id: int, document_id: int, content: str) -> int:
-    indexed = 0
-    for chunk in chunk_text(content):
-        vector = ai_client.embed(chunk)
-        vector_store.upsert_chunk(
-            chunk_id=vector_store.new_chunk_id(),
-            vector=vector,
-            payload={"user_id": user_id, "document_id": document_id, "text": chunk},
-        )
-        indexed += 1
-    return indexed
+    cfg = RunnableConfig(tags=["documents", "index"], metadata=graph_run_metadata("document_index"))
+    out = invoke_document_index(
+        vector_store,
+        {
+            "index_user_id": user_id,
+            "index_document_id": document_id,
+            "index_content": content,
+        },
+        config=cfg,
+    )
+    return int(out.get("chunks_indexed") or 0)
 
 
 def extract_text_from_upload(file: UploadFile, content_bytes: bytes) -> str:

@@ -26,6 +26,27 @@ def _mock_chunk_id() -> str:
     return str(uuid4())
 
 
+def _mock_chat_model_invoke(content: str) -> MagicMock:
+    from langchain_core.messages import AIMessage
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = AIMessage(content=content)
+    return mock_llm
+
+
+def _mock_chat_model_stream(parts: list[str]) -> MagicMock:
+    mock_llm = MagicMock()
+
+    class _Chunk:
+        __slots__ = ("content",)
+
+        def __init__(self, c: str):
+            self.content = c
+
+    mock_llm.stream.return_value = iter([_Chunk(p) for p in parts])
+    return mock_llm
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
@@ -170,10 +191,12 @@ def test_conversation_messages_requires_ownership_and_keeps_order():
     with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
         "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
     ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
-        "app.api.routes_teacher.ai_client.embed", side_effect=_mock_embed
+        "app.services.ai.ai_client.embed", side_effect=_mock_embed
     ), patch(
         "app.api.routes_teacher.vector_store.search", return_value=["Chunk context"]
-    ), patch("app.api.routes_teacher.ai_client.chat", return_value="תשובה ראשונה"):
+    ), patch(
+        "app.agents.llm.get_chat_model", return_value=_mock_chat_model_invoke("תשובה ראשונה")
+    ):
         uploaded = client.post(
             "/documents/upload",
             headers=owner_headers,
@@ -243,9 +266,9 @@ def test_teacher_chat_stream_returns_deltas_and_persists_messages():
     with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
         "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
     ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
-        "app.api.routes_teacher.ai_client.embed", side_effect=_mock_embed
+        "app.services.ai.ai_client.embed", side_effect=_mock_embed
     ), patch("app.api.routes_teacher.vector_store.search", return_value=["Chunk context"]), patch(
-        "app.api.routes_teacher.ai_client.chat_stream", return_value=iter(["שלום", " עולם"])
+        "app.agents.llm.get_chat_model", return_value=_mock_chat_model_stream(["שלום", " עולם"])
     ):
         uploaded = client.post(
             "/documents/upload",
@@ -280,6 +303,125 @@ def test_teacher_chat_stream_returns_deltas_and_persists_messages():
     assert "assistant" in roles
 
 
+def test_teacher_project_ideas_returns_suggestions():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+
+    with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
+    ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
+        "app.services.ai.ai_client.embed", side_effect=_mock_embed
+    ), patch("app.api.routes_teacher.vector_store.search", return_value=["Context chunk"]), patch(
+        "app.agents.llm.get_chat_model",
+        return_value=_mock_chat_model_invoke("1. פרויקט לדוגמה\nתיאור קצר."),
+    ):
+        uploaded = client.post(
+            "/documents/upload",
+            headers=headers,
+            files={"file": ("proj.txt", b"content", "text/plain")},
+        )
+        assert uploaded.status_code == 200
+        doc_id = uploaded.json()["id"]
+        selected = client.put("/documents/selected", headers=headers, json={"document_ids": [doc_id]})
+        assert selected.status_code == 200
+
+        res = client.post(
+            "/teacher/project-ideas",
+            headers=headers,
+            json={
+                "learning_focus": "להבין את הנושא לעומק",
+                "experience_band": "beginner_short",
+                "document_ids": [doc_id],
+            },
+        )
+
+    assert res.status_code == 200
+    data = res.json()
+    assert "suggestions" in data
+    assert "פרויקט" in data["suggestions"]
+
+
+def test_saved_projects_crud():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+
+    empty = client.get("/teacher/saved-projects", headers=headers)
+    assert empty.status_code == 200
+    assert empty.json() == []
+
+    create = client.post(
+        "/teacher/saved-projects",
+        headers=headers,
+        json={
+            "kind": "ai",
+            "title": "פרויקט ראשון",
+            "suggestions_body": "## רעיון\nתיאור",
+            "learning_focus": "פייתון",
+            "experience_band": "beginner_short",
+            "document_ids": [1, 2],
+        },
+    )
+    assert create.status_code == 200
+    created = create.json()
+    assert created["title"] == "פרויקט ראשון"
+    assert created["kind"] == "ai"
+    assert created["importance"] == "medium"
+    assert created["status"] == "not_started"
+    assert created["document_ids"] == [1, 2]
+    project_id = created["id"]
+
+    listed = client.get("/teacher/saved-projects", headers=headers)
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+    assert listed.json()[0]["id"] == project_id
+
+    patched = client.patch(
+        f"/teacher/saved-projects/{project_id}",
+        headers=headers,
+        json={"status": "in_progress", "notes": "מתחילים השבוע"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["status"] == "in_progress"
+    assert patched.json()["notes"] == "מתחילים השבוע"
+
+    deleted = client.delete(f"/teacher/saved-projects/{project_id}", headers=headers)
+    assert deleted.status_code == 204
+
+    after = client.get("/teacher/saved-projects", headers=headers)
+    assert after.json() == []
+
+    missing = client.patch(f"/teacher/saved-projects/{project_id}", headers=headers, json={"status": "done"})
+    assert missing.status_code == 404
+
+
+def test_saved_projects_manual_create():
+    payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
+
+    create = client.post(
+        "/teacher/saved-projects",
+        headers=headers,
+        json={
+            "kind": "manual",
+            "title": "ללמוד Rust",
+            "description": "לעבור על ספר בסיסי ולכתוב CLI קטן",
+            "importance": "high",
+            "status": "in_progress",
+        },
+    )
+    assert create.status_code == 200
+    data = create.json()
+    assert data["kind"] == "manual"
+    assert data["importance"] == "high"
+    assert data["status"] == "in_progress"
+    assert data["description"] == "לעבור על ספר בסיסי ולכתוב CLI קטן"
+    assert data["document_ids"] == []
+    assert data["experience_band"] == "manual"
+
+
 def test_submit_quiz_returns_detailed_feedback_text():
     payload = {"email": f"user-{uuid4()}@example.com", "password": "Secret123"}
     register = client.post("/auth/register", json=payload)
@@ -302,14 +444,17 @@ def test_submit_quiz_returns_detailed_feedback_text():
         "accepted_semantically": True,
     }
 
+    from langchain_core.messages import AIMessage
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = [
+        AIMessage(content=json.dumps(generated_payload, ensure_ascii=False)),
+        AIMessage(content=json.dumps(semantic_eval_payload, ensure_ascii=False)),
+    ]
     with patch("app.api.routes_documents.ai_client.embed", side_effect=_mock_embed), patch(
         "app.api.routes_documents.vector_store.new_chunk_id", side_effect=_mock_chunk_id
     ), patch("app.api.routes_documents.vector_store.upsert_chunk", return_value=None), patch(
-        "app.api.routes_quiz.ai_client.chat",
-        side_effect=[
-            json.dumps(generated_payload, ensure_ascii=False),
-            json.dumps(semantic_eval_payload, ensure_ascii=False),
-        ],
+        "app.agents.llm.get_chat_model", return_value=mock_llm
     ):
         uploaded = client.post(
             "/documents/upload",
@@ -497,6 +642,70 @@ def test_grading_prompt_contains_evaluation_criteria():
 
     empty_prompt = build_semantic_grading_prompt("שאלה", "תשובה", "")
     assert "לא ניתנה תשובה" in empty_prompt
+
+
+def test_podcast_prompt_contains_dialogue_instructions():
+    from app.prompts.podcast import PODCAST_SYSTEM_PROMPT, build_podcast_user_prompt
+
+    assert "דני" in PODCAST_SYSTEM_PROMPT
+    assert "מיכל" in PODCAST_SYSTEM_PROMPT
+    assert "speaker" in PODCAST_SYSTEM_PROMPT
+    assert "JSON" in PODCAST_SYSTEM_PROMPT
+    assert len(PODCAST_SYSTEM_PROMPT) > 300
+
+    prompt = build_podcast_user_prompt("חומר לימוד על מתמטיקה")
+    assert "חומר לימוד על מתמטיקה" in prompt
+    assert "40-60" in prompt
+
+
+def test_text_to_speech_calls_openai():
+    with patch("app.services.ai.settings") as mock_settings:
+        mock_settings.openai_api_key = "sk-test"
+        mock_settings.openai_tts_model = "tts-1"
+
+        from app.services.ai import AIClient
+
+        ai = AIClient()
+        mock_response = MagicMock()
+        mock_response.content = b"fake-mp3-bytes"
+        ai.client.audio.speech.create = MagicMock(return_value=mock_response)
+
+        result = ai.text_to_speech("שלום עולם", voice="alloy")
+        assert result == b"fake-mp3-bytes"
+        ai.client.audio.speech.create.assert_called_once_with(
+            model="tts-1", voice="alloy", input="שלום עולם", response_format="mp3"
+        )
+
+
+def test_podcast_list_empty_for_new_user():
+    payload = {"email": f"user-podcast-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/podcast/list", headers=headers)
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_podcast_generate_requires_documents():
+    payload = {"email": f"user-podcast-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post("/podcast/generate", json={"document_ids": []}, headers=headers)
+    assert response.status_code == 400
+
+
+def test_podcast_audio_not_found_for_invalid_id():
+    payload = {"email": f"user-podcast-{uuid4()}@example.com", "password": "Secret123"}
+    register = client.post("/auth/register", json=payload)
+    token = register.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.get("/podcast/99999/audio", headers=headers)
+    assert response.status_code == 404
 
 
 def test_transcribe_audio_uses_local_whisper_when_configured():

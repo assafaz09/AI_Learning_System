@@ -28,7 +28,6 @@ body {
     radial-gradient(circle at 0% 0%, #ffffff 0%, var(--bg) 46%),
     linear-gradient(180deg, #f9fbff 0%, var(--bg-soft) 100%);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
   direction: rtl;
   text-align: right;
   line-height: 1.5;
@@ -61,6 +60,16 @@ ol {
   max-width: 1120px;
   margin: 0 auto;
   padding: 24px 24px 36px;
+}
+
+.page:has(.teacher-chat-screen) {
+  max-width: none;
+  width: 100%;
+  padding: 16px 20px 100px;
+}
+
+.page:has(.my-projects-page) {
+  max-width: 920px;
 }
 
 .glass {
@@ -201,8 +210,68 @@ ol {
   min-width: 0;
 }
 
+.app-layout--topnav .app-content {
+  margin-inline-end: 0;
+}
+
 .mobile-topbar {
   display: none;
+}
+
+.app-layout--topnav .mobile-topbar--persistent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  box-shadow: -4px 0 24px rgba(37, 99, 235, 0.04);
+}
+
+.app-topbar-start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.app-topbar-greeting {
+  font-size: 0.88rem;
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+
+.app-topbar-end {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: auto;
+  justify-content: flex-end;
+}
+
+.app-topbar-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-topbar-logout {
+  width: auto;
+  min-width: fit-content;
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-radius: 11px;
+  line-height: 1;
+  box-shadow: none;
+  border: 1px solid #cddcff;
 }
 
 .sidebar-toggle {
@@ -528,21 +597,35 @@ label input[type="checkbox"] {
 }
 
 .teacher-chat-screen {
-  min-height: 100vh;
+  --teacher-tools-width: min(280px, 28vw);
+  --teacher-docs-width: min(320px, 28vw);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 18px;
+  min-height: calc(100vh - 96px);
   position: relative;
-  display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 16px;
-  padding-bottom: 96px;
+  padding-bottom: 0;
+}
+
+.teacher-chat-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-height: 0;
+  padding-bottom: 100px;
 }
 
 .teacher-floating-actions {
-  position: absolute;
-  top: 8px;
-  inset-inline-end: 0;
-  display: inline-flex;
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
-  z-index: 8;
+  padding: 4px 0 12px;
+  z-index: 2;
 }
 
 .teacher-floating-actions .btn-secondary {
@@ -554,9 +637,11 @@ label input[type="checkbox"] {
   display: grid;
   align-content: start;
   gap: 12px;
-  padding-top: 66px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 0;
   padding-bottom: 24px;
-  min-height: calc(100vh - 160px);
 }
 
 .teacher-empty-state {
@@ -577,9 +662,15 @@ label input[type="checkbox"] {
 
 .teacher-composer-wrap {
   position: fixed;
-  inset-inline: 24px;
   bottom: 22px;
   z-index: 10;
+  inset-inline-end: calc(220px + 24px);
+  inset-inline-start: calc(24px + var(--teacher-rail-width, 0px) + 18px);
+}
+
+.app-layout--topnav .teacher-composer-wrap {
+  inset-inline-end: calc(24px + var(--teacher-tools-width) + 18px);
+  inset-inline-start: calc(24px + var(--teacher-docs-width) + 18px);
 }
 
 .teacher-composer {
@@ -607,25 +698,505 @@ label input[type="checkbox"] {
   padding: 12px 14px;
 }
 
-.teacher-drawer {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  inset-inline-start: -420px;
-  width: min(420px, 90vw);
-  z-index: 40;
-  padding: 18px;
-  transition: inset-inline-start 220ms ease;
+.teacher-docs-rail {
+  width: var(--teacher-docs-width);
+  flex-shrink: 0;
+  min-height: min(calc(100vh - 120px), 900px);
+  max-height: calc(100vh - 48px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
 }
 
-.teacher-drawer.open {
-  inset-inline-start: 0;
+.teacher-docs-rail .glass {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.teacher-drawer .glass {
-  height: 100%;
+.teacher-tools-rail {
+  width: var(--teacher-tools-width);
+  flex-shrink: 0;
+  min-height: min(calc(100vh - 120px), 900px);
+  max-height: calc(100vh - 48px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  order: 3;
+}
+
+.teacher-tools-rail .glass {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.teacher-tools-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.teacher-tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.teacher-tool-tab {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: fit-content;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+
+.teacher-tool-tab.active {
+  border-color: #9dbefe;
+  background: #dce9ff;
+  color: var(--accent-strong);
+}
+
+.teacher-tool-panels {
+  flex: 1;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.teacher-tool-panel {
+  min-width: 0;
+}
+
+.teacher-projects-panel {
+  gap: 12px;
+}
+
+.teacher-projects-segment {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.teacher-projects-segment-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #c9d4e8);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.teacher-projects-segment-btn:hover {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.teacher-projects-segment-btn.active {
+  border-color: #9dbefe;
+  background: #dce9ff;
+  color: var(--accent-strong, #1a4a8a);
+  font-weight: 600;
+}
+
+.teacher-projects-hint {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.teacher-project-form {
+  gap: 10px;
+}
+
+.teacher-form-field {
+  gap: 4px;
+}
+
+.teacher-form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.teacher-suggestions-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.teacher-suggestions-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.teacher-save-title-field input {
+  width: 100%;
+}
+
+.teacher-save-projects-btn {
+  align-self: flex-start;
+}
+
+.teacher-suggestion-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(48vh, 340px);
+  overflow-y: auto;
+  padding-inline-end: 2px;
+}
+
+.teacher-suggestion-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin: 0;
+}
+
+.teacher-suggestion-card-title {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: var(--accent-strong, #1a4a8a);
+}
+
+.teacher-suggestion-card-body {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  white-space: pre-line;
+  word-break: break-word;
+  color: var(--text);
+}
+
+.teacher-saved-projects-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(52vh, 400px);
+  overflow-y: auto;
+}
+
+.teacher-saved-project-card {
+  padding: 12px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.teacher-saved-project-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.teacher-saved-project-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.teacher-saved-project-name {
+  font-size: 0.95rem;
+}
+
+.teacher-saved-project-meta {
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+.teacher-saved-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.teacher-saved-delete-btn {
+  color: #8b2942;
+  border-color: #e8c2cb;
+}
+
+.teacher-saved-focus-reminder {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.teacher-saved-detail-cards {
+  max-height: min(40vh, 280px);
+  margin-top: 4px;
+}
+
+.teacher-projects-page-link {
+  margin-inline: 4px;
+}
+
+.teacher-projects-transfer-prompt {
+  padding: 14px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.teacher-projects-transfer-text {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.teacher-projects-transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.my-projects-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 48px;
+}
+
+.my-projects-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.my-projects-header h1 {
+  margin: 0 0 6px;
+  font-size: 1.5rem;
+  color: var(--text);
+}
+
+.my-projects-subtitle {
+  max-width: 52ch;
+}
+
+.my-projects-draft,
+.my-projects-manual,
+.my-projects-list-section {
+  padding: 18px;
+}
+
+.my-projects-draft h2,
+.my-projects-manual h2,
+.my-projects-list-section h2 {
+  font-size: 1.1rem;
+  margin: 0 0 8px;
+  color: var(--accent-strong);
+}
+
+.my-projects-draft-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.my-projects-draft-meta {
+  font-size: 0.85rem;
+}
+
+.my-projects-draft-preview {
+  max-height: min(36vh, 300px);
+}
+
+.my-projects-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.my-projects-manual-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.my-projects-manual-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .my-projects-manual-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.my-projects-cards {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.my-projects-card {
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.my-projects-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.my-projects-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.my-projects-kind-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--accent-strong);
+}
+
+.my-projects-kind-badge.kind-manual {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.my-projects-card-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .my-projects-card-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.my-projects-card-meta {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.my-projects-expand-cards {
+  max-height: min(40vh, 280px);
+  margin-top: 8px;
+}
+
+.teacher-roadmap-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.teacher-roadmap-item-title {
+  color: var(--text);
+}
+
+.teacher-roadmap-item-detail {
+  margin-top: 4px;
+}
+
+.teacher-tools-rail input,
+.teacher-tools-rail textarea,
+.teacher-tools-rail select,
+.teacher-tools-rail button {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .teacher-chat-screen {
+    flex-direction: column;
+    gap: 12px;
+    min-height: auto;
+  }
+
+  .teacher-tools-rail {
+    order: 1;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .teacher-chat-main {
+    order: 2;
+  }
+
+  .teacher-docs-rail {
+    order: 3;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .app-layout--topnav .teacher-composer-wrap {
+    inset-inline-start: 12px;
+    inset-inline-end: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .teacher-composer-wrap {
+    inset-inline-start: 12px;
+    inset-inline-end: 12px;
+  }
+
+  .page:has(.teacher-chat-screen) {
+    padding-bottom: 120px;
+  }
+}
+
+.teacher-drawer-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.teacher-drawer-fixed {
+  flex-shrink: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.teacher-drawer-scrollable {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+  align-content: start;
 }
 
 .teacher-drawer-header {
@@ -660,23 +1231,25 @@ label input[type="checkbox"] {
   border-color: #fecaca;
 }
 
-.teacher-drawer .stack {
+.teacher-docs-rail .stack,
+.teacher-drawer-layout {
   min-width: 0;
 }
 
-.teacher-drawer input,
-.teacher-drawer button {
+.teacher-docs-rail input,
+.teacher-docs-rail button {
   max-width: 100%;
   box-sizing: border-box;
 }
 
-.teacher-drawer input[type="file"] {
+.teacher-docs-rail input[type="file"] {
   overflow: hidden;
 }
 
 @media (max-width: 700px) {
   .teacher-composer-wrap {
-    inset-inline: 12px;
+    inset-inline-start: 12px;
+    inset-inline-end: 12px;
     bottom: 12px;
   }
 
@@ -884,4 +1457,94 @@ label input[type="checkbox"] {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ── Podcast ── */
+
+.btn-podcast-generate {
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: opacity 180ms;
+}
+
+.btn-podcast-generate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.podcast-progress {
+  animation: rise-in 300ms ease-out;
+}
+
+.podcast-player {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  animation: rise-in 300ms ease-out;
+}
+
+.podcast-player audio {
+  border-radius: 8px;
+}
+
+.podcast-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: rise-in 200ms ease-out;
+}
+
+.podcast-modal {
+  width: min(420px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.podcast-modal h3 {
+  margin: 0 0 8px;
+}
+
+.podcast-modal .item-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.podcast-modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.podcast-modal-actions button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.podcast-modal-actions button:first-child {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+
+.podcast-modal-actions button:first-child:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

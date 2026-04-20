@@ -159,6 +159,106 @@ export async function getConversationMessages(conversationId: number): Promise<T
   return apiFetch<TeacherConversationMessagesResponse>(`/teacher/conversations/${conversationId}/messages`);
 }
 
+export type PodcastItem = {
+  id: number;
+  title: string;
+  duration_seconds: number;
+  created_at: string;
+};
+
+type PodcastStreamHandlers = {
+  onProgress: (message: string, step?: number, total?: number) => void;
+  onDone: (podcastId: number, durationSeconds: number) => void;
+  onError: (detail: string) => void;
+};
+
+export async function getPodcastList(): Promise<PodcastItem[]> {
+  return apiFetch<PodcastItem[]>("/podcast/list");
+}
+
+export function getPodcastAudioUrl(podcastId: number): string {
+  return `${baseUrl}/podcast/${podcastId}/audio`;
+}
+
+/** Use for <audio>: plain GET from src= cannot send Authorization; fetch with token then object URL. */
+export async function fetchPodcastAudioBlob(podcastId: number): Promise<Blob> {
+  const response = await authorizedFetch(`/podcast/${podcastId}/audio`, { method: "GET" });
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response));
+  }
+  return response.blob();
+}
+
+export async function streamPodcastGeneration(
+  documentIds: number[],
+  handlers: PodcastStreamHandlers
+): Promise<void> {
+  const response = await authorizedFetch("/podcast/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ document_ids: documentIds }),
+  });
+
+  if (!response.ok || !response.body) {
+    const detail = await readErrorDetail(response);
+    throw new Error(detail || `Podcast generation request failed ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let activeEvent = "";
+
+  const processBlock = (block: string) => {
+    const lines = block.split("\n");
+    let data = "";
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (line.startsWith("event:")) {
+        activeEvent = line.slice("event:".length).trim();
+      } else if (line.startsWith("data:")) {
+        data += line.slice("data:".length).trim();
+      }
+    }
+    if (!data) return;
+    try {
+      const parsed = JSON.parse(data) as {
+        message?: string;
+        step?: number;
+        total?: number;
+        detail?: string;
+        podcast_id?: number;
+        duration_seconds?: number;
+      };
+      if (activeEvent === "progress" && parsed.message) {
+        handlers.onProgress(parsed.message, parsed.step, parsed.total);
+      } else if (activeEvent === "error") {
+        handlers.onError(parsed.detail || "Podcast generation error");
+      } else if (activeEvent === "done" && parsed.podcast_id) {
+        handlers.onDone(parsed.podcast_id, parsed.duration_seconds || 0);
+      }
+    } catch {
+      handlers.onError("Failed to parse podcast stream event");
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    let separatorIndex = buffer.indexOf("\n\n");
+    while (separatorIndex !== -1) {
+      const block = buffer.slice(0, separatorIndex);
+      buffer = buffer.slice(separatorIndex + 2);
+      processBlock(block);
+      separatorIndex = buffer.indexOf("\n\n");
+    }
+    if (done) {
+      if (buffer.trim().length > 0) processBlock(buffer);
+      break;
+    }
+  }
+}
+
 export async function streamTeacherChat(
   payload: TeacherChatStreamRequest,
   handlers: TeacherStreamHandlers
@@ -225,5 +325,94 @@ export async function streamTeacherChat(
       }
       break;
     }
+  }
+}
+
+export type ExperienceBand = "beginner_short" | "intermediate_days" | "advanced_extended";
+
+export type ProjectIdeasRequestBody = {
+  learning_focus: string;
+  experience_band: ExperienceBand;
+  document_ids?: number[] | null;
+};
+
+export type ProjectIdeasApiResponse = {
+  suggestions: string;
+};
+
+export async function suggestLearningProjects(body: ProjectIdeasRequestBody): Promise<ProjectIdeasApiResponse> {
+  return apiFetch<ProjectIdeasApiResponse>("/teacher/project-ideas", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export type SavedProjectStatus = "not_started" | "in_progress" | "done";
+export type ProjectKind = "ai" | "manual";
+export type ProjectImportance = "low" | "medium" | "high";
+
+export type SavedProject = {
+  id: number;
+  kind: ProjectKind;
+  title: string;
+  suggestions_body: string;
+  learning_focus: string;
+  experience_band: string;
+  document_ids: number[];
+  importance: ProjectImportance;
+  description: string | null;
+  status: SavedProjectStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SavedProjectCreateBody =
+  | {
+      kind: "ai";
+      title: string;
+      suggestions_body: string;
+      learning_focus: string;
+      experience_band: ExperienceBand;
+      document_ids: number[];
+    }
+  | {
+      kind: "manual";
+      title: string;
+      description: string;
+      importance?: ProjectImportance;
+      status?: SavedProjectStatus;
+    };
+
+export type SavedProjectUpdateBody = {
+  title?: string;
+  status?: SavedProjectStatus;
+  notes?: string;
+  importance?: ProjectImportance;
+  description?: string | null;
+};
+
+export async function listSavedProjects(): Promise<SavedProject[]> {
+  return apiFetch<SavedProject[]>("/teacher/saved-projects");
+}
+
+export async function createSavedProject(body: SavedProjectCreateBody): Promise<SavedProject> {
+  return apiFetch<SavedProject>("/teacher/saved-projects", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function updateSavedProject(id: number, body: SavedProjectUpdateBody): Promise<SavedProject> {
+  return apiFetch<SavedProject>(`/teacher/saved-projects/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function deleteSavedProject(id: number): Promise<void> {
+  const response = await authorizedFetch(`/teacher/saved-projects/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response));
   }
 }

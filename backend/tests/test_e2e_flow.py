@@ -1,8 +1,9 @@
 import os
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from langchain_core.messages import AIMessage
 
 
 os.environ["DATABASE_URL"] = f"sqlite:///{Path(__file__).parent / 'test_e2e.db'}"
@@ -16,8 +17,12 @@ def _mock_embed(_: str) -> list[float]:
     return [0.1] * 64
 
 
-def _mock_chat(_: str, __: str) -> str:
-    return "Q: מהי ירידת מפל\nA: שיטת אופטימיזציה איטרטיבית"
+def _e2e_chat_model() -> MagicMock:
+    mock_llm = MagicMock()
+    mock_llm.invoke.return_value = AIMessage(
+        content="Q: מהי ירידת מפל\nA: שיטת אופטימיזציה איטרטיבית"
+    )
+    return mock_llm
 
 
 def _mock_chunk_id() -> str:
@@ -40,10 +45,8 @@ def test_end_to_end_learning_flow():
         "app.api.routes_documents.vector_store.upsert_chunk", return_value=None
     ), patch(
         "app.api.routes_teacher.vector_store.search", return_value=["Gradient descent optimizes iteratively."]
-    ), patch(
-        "app.api.routes_teacher.ai_client.embed", side_effect=_mock_embed
-    ), patch("app.api.routes_teacher.ai_client.chat", side_effect=_mock_chat), patch(
-        "app.api.routes_quiz.ai_client.chat", side_effect=_mock_chat
+    ), patch("app.services.ai.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.agents.llm.get_chat_model", return_value=_e2e_chat_model()
     ):
         uploaded = client.post(
             "/documents/upload",
@@ -66,8 +69,8 @@ def test_end_to_end_learning_flow():
     selected = client.put("/documents/selected", headers=headers, json={"document_ids": [doc_id, doc_two_id]})
     assert selected.status_code == 200
 
-    with patch("app.api.routes_teacher.ai_client.embed", side_effect=_mock_embed), patch(
-        "app.api.routes_teacher.ai_client.chat", side_effect=_mock_chat
+    with patch("app.services.ai.ai_client.embed", side_effect=_mock_embed), patch(
+        "app.agents.llm.get_chat_model", return_value=_e2e_chat_model()
     ):
         teacher = client.post(
             "/teacher/chat",
@@ -76,7 +79,7 @@ def test_end_to_end_learning_flow():
         )
     assert teacher.status_code == 200
 
-    with patch("app.api.routes_quiz.ai_client.chat", side_effect=_mock_chat):
+    with patch("app.agents.llm.get_chat_model", return_value=_e2e_chat_model()):
         quiz = client.post(
             "/quiz/generate",
             headers=headers,
@@ -88,6 +91,7 @@ def test_end_to_end_learning_flow():
     assert len(questions) > 0
 
     answers = {question["id"]: "Gradient descent optimizes model parameters iteratively." for question in questions}
-    grade = client.post(f"/quiz/{quiz_id}/submit", headers=headers, json={"answers": answers})
+    with patch("app.agents.llm.get_chat_model", return_value=_e2e_chat_model()):
+        grade = client.post(f"/quiz/{quiz_id}/submit", headers=headers, json={"answers": answers})
     assert grade.status_code == 200
     assert "score" in grade.json()

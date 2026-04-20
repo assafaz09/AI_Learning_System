@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     openai_chat_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     openai_transcription_model: str = "whisper-1"
+    openai_tts_model: str = "tts-1"
     whisper_mode: str = "local"  # "local" (free, slower) or "api" (paid, faster)
     whisper_local_model: str = "base"
     qdrant_url: str = "http://qdrant:6333"
@@ -22,6 +23,19 @@ class Settings(BaseSettings):
     qdrant_collection_name: str = "documents"
     upload_dir: str = "/app/uploads"
     next_public_api_base_url: str = "http://localhost:8000"
+
+    # LangSmith / LangChain tracing (optional)
+    # Use either LANGCHAIN_* (legacy) or LANGSMITH_* (LangSmith UI wizard) — both are merged at startup.
+    langchain_tracing_v2: bool = False
+    langchain_api_key: str = ""
+    langchain_project: str = "ai-learning-system"
+    langchain_endpoint: str = "https://api.smith.langchain.com"
+    langchain_runs_batch_size: str = ""
+    langchain_metadata: str = ""
+    langsmith_tracing: bool = False
+    langsmith_api_key: str = ""
+    langsmith_project: str = ""
+    langsmith_endpoint: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

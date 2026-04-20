@@ -1,0 +1,12 @@
+{
+  "python_version": "3.11",
+  "dependencies": ["./requirements.txt"],
+  "graphs": {
+    "teacher_chat": "./app/agents/studio_entry.py:teacher_chat_graph",
+    "project_ideas": "./app/agents/studio_entry.py:project_ideas_graph",
+    "quiz_generate": "./app/agents/studio_entry.py:quiz_generate_graph",
+    "podcast_script": "./app/agents/studio_entry.py:podcast_script_graph",
+    "document_index": "./app/agents/studio_entry.py:document_index_graph"
+  },
+  "env": "../.env"
+}

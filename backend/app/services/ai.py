@@ -68,6 +68,16 @@ class AIClient:
             if delta:
                 yield delta
 
+    def text_to_speech(self, text: str, voice: str = "alloy") -> bytes:
+        client = self._require_client()
+        response = client.audio.speech.create(
+            model=settings.openai_tts_model,
+            voice=voice,
+            input=text,
+            response_format="mp3",
+        )
+        return response.content
+
     def _transcribe_via_api(self, file_path: Path) -> str:
         client = self._require_client()
         with file_path.open("rb") as audio_file:

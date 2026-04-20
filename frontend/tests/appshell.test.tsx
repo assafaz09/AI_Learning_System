@@ -33,7 +33,7 @@ describe("AppShell greeting", () => {
 
   test("greeting matches Israel time of day", () => {
     render(<AppShell><div>child</div></AppShell>);
-    const el = document.querySelector(".sidebar-greeting");
+    const el = document.querySelector(".app-topbar-greeting");
     expect(el).toBeTruthy();
     const text = el!.textContent || "";
     const valid = ["בוקר טוב", "צהריים טובים", "ערב טוב", "לילה טוב"];
@@ -44,6 +44,6 @@ describe("AppShell greeting", () => {
     mockPathname = "/login";
     localStorage.clear();
     render(<AppShell><div>child</div></AppShell>);
-    expect(document.querySelector(".sidebar-greeting")).toBeNull();
+    expect(document.querySelector(".app-topbar-greeting")).toBeNull();
   });
 });

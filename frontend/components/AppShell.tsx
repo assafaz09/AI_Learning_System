@@ -10,6 +10,7 @@ const publicPaths = new Set(["/", "/auth", "/login", "/register"]);
 const links: { href: Route; label: string }[] = [
   { href: "/dashboard", label: "בית" },
   { href: "/teacher", label: "המורה שלך" },
+  { href: "/teacher/my-projects" as Route, label: "פרויקטים שלי" },
   { href: "/quiz", label: "צור שאלון" },
   { href: "/grader", label: "בחן את עצמך" },
   { href: "/history", label: "היסטוריה" },
@@ -30,7 +31,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -52,10 +52,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
     setIsReady(true);
   }, [pathname, router]);
 
-  useEffect(() => {
-    setSidebarOpen(false);
-  }, [pathname]);
-
   const onLogout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
@@ -74,47 +70,29 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="app-layout">
-      {sidebarOpen && (
-        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
-        <div className="sidebar-brand">AI Learning System</div>
-        <div className="sidebar-greeting">
-          {greeting}
-        </div>
-
-        <nav className="sidebar-nav">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`sidebar-link${pathname === link.href ? " active" : ""}`}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          <button className="sidebar-logout-btn" onClick={onLogout}>
-            התנתקות
-          </button>
-        </div>
-      </aside>
-
+    <div className="app-layout app-layout--topnav">
       <div className="app-content">
-        <header className="mobile-topbar">
-          <button
-            type="button"
-            className="sidebar-toggle"
-            onClick={() => setSidebarOpen((p) => !p)}
-            aria-label="תפריט"
-          >
-            <span /><span /><span />
-          </button>
-          <span className="brand">AI Learning System</span>
+        <header className="mobile-topbar mobile-topbar--persistent">
+          <div className="app-topbar-start">
+            <span className="brand">AI Learning System</span>
+            <span className="app-topbar-greeting">{greeting}</span>
+          </div>
+          <div className="app-topbar-end">
+            <nav className="app-topbar-nav" aria-label="ניווט ראשי">
+              {links.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`sidebar-link${pathname === link.href ? " active" : ""}`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+            <button type="button" className="btn-secondary app-topbar-logout" onClick={onLogout}>
+              התנתקות
+            </button>
+          </div>
         </header>
         <div className="page">
           {children}

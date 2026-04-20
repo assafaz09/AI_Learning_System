@@ -80,6 +80,19 @@ class Grade(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class Podcast(Base):
+    __tablename__ = "podcasts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    script: Mapped[str] = mapped_column(Text, default="")
+    audio_path: Mapped[str] = mapped_column(String(512), default="")
+    duration_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class UserDocumentSelection(Base):
     __tablename__ = "user_document_selection"
     __table_args__ = (UniqueConstraint("user_id", "document_id", name="uq_user_document_selection"),)
@@ -88,3 +101,22 @@ class UserDocumentSelection(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LearningProject(Base):
+    __tablename__ = "learning_projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    suggestions_body: Mapped[str] = mapped_column(Text)
+    learning_focus: Mapped[str] = mapped_column(Text)
+    experience_band: Mapped[str] = mapped_column(String(64))
+    document_ids_json: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16), default="ai")
+    importance: Mapped[str] = mapped_column(String(16), default="medium")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="not_started")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

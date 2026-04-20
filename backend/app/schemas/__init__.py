@@ -1,7 +1,17 @@
 from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserOut
 from app.schemas.document import DocumentOut, ExternalSourceImportRequest, SelectedDocumentsRequest, SelectedDocumentsResponse
+from app.schemas.podcast import PodcastGenerateRequest, PodcastOut
 from app.schemas.quiz import GradeOut, QuestionOut, QuizGenerateRequest, QuizOut, QuizSubmitRequest
 from app.schemas.teacher import (
+    ProjectIdeasRequest,
+    ProjectIdeasResponse,
+    ProjectImportance,
+    ProjectKind,
+    SavedProjectCreate,
+    SavedProjectCreateAI,
+    SavedProjectCreateManual,
+    SavedProjectOut,
+    SavedProjectUpdate,
     TeacherChatRequest,
     TeacherChatResponse,
     TeacherConversationMessagesResponse,
@@ -13,7 +23,18 @@ __all__ = [
     "ExternalSourceImportRequest",
     "GradeOut",
     "LoginRequest",
+    "PodcastGenerateRequest",
+    "PodcastOut",
+    "ProjectIdeasRequest",
+    "ProjectIdeasResponse",
+    "ProjectImportance",
+    "ProjectKind",
     "QuestionOut",
+    "SavedProjectCreate",
+    "SavedProjectCreateAI",
+    "SavedProjectCreateManual",
+    "SavedProjectOut",
+    "SavedProjectUpdate",
     "QuizGenerateRequest",
     "QuizOut",
     "QuizSubmitRequest",
