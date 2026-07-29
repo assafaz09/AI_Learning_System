@@ -5,6 +5,15 @@ type TokenPayload = { access_token: string };
 let refreshInFlight: Promise<boolean> | null = null;
 export type TeacherMessage = { id: number; role: "user" | "assistant"; content: string; created_at: string };
 export type TeacherConversationMessagesResponse = { conversation_id: number; messages: TeacherMessage[] };
+export type GroupLearningSession = {
+  id: number;
+  title: string;
+  document_ids: number[];
+  next_speaker: string;
+};
+export type GroupLearningMessage = { id: number; role: string; content: string; created_at: string };
+export type GroupLearningMessagesResponse = { session_id: number; messages: GroupLearningMessage[] };
+export type GroupLearningReply = { session_id: number; reply: string; speaker: string };
 export type TeacherChatStreamRequest = { message: string; document_ids: number[]; conversation_id?: number | null };
 type TeacherStreamHandlers = {
   onDelta: (delta: string) => void;
@@ -157,6 +166,31 @@ export async function deleteDocument(documentId: number): Promise<void> {
 
 export async function getConversationMessages(conversationId: number): Promise<TeacherConversationMessagesResponse> {
   return apiFetch<TeacherConversationMessagesResponse>(`/teacher/conversations/${conversationId}/messages`);
+}
+
+export async function listGroupLearningSessions(): Promise<GroupLearningSession[]> {
+  return apiFetch<GroupLearningSession[]>("/group-learning/sessions");
+}
+
+export async function createGroupLearningSession(body: {
+  document_ids: number[];
+  title?: string | null;
+}): Promise<GroupLearningSession> {
+  return apiFetch<GroupLearningSession>("/group-learning/sessions", {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+}
+
+export async function postGroupLearningMessage(sessionId: number, message: string): Promise<GroupLearningReply> {
+  return apiFetch<GroupLearningReply>(`/group-learning/sessions/${sessionId}/message`, {
+    method: "POST",
+    body: JSON.stringify({ message })
+  });
+}
+
+export async function getGroupLearningMessages(sessionId: number): Promise<GroupLearningMessagesResponse> {
+  return apiFetch<GroupLearningMessagesResponse>(`/group-learning/sessions/${sessionId}/messages`);
 }
 
 export type PodcastItem = {
@@ -415,4 +449,56 @@ export async function deleteSavedProject(id: number): Promise<void> {
   if (!response.ok) {
     throw new Error(await readErrorDetail(response));
   }
+}
+
+export type ProgressSummary = {
+  documents_count: number;
+  conversations_count: number;
+  teacher_messages_count: number;
+  quizzes_created: number;
+  quizzes_graded: number;
+  average_quiz_score: number | null;
+  best_quiz_score: number | null;
+  group_sessions_count: number;
+  group_messages_count: number;
+  projects_total: number;
+  projects_done: number;
+  projects_in_progress: number;
+  projects_not_started: number;
+  projects_completion_percent: number;
+  podcasts_count: number;
+  overall_progress_percent: number;
+};
+
+export type QuizScorePoint = {
+  date: string;
+  score: number;
+  quiz_id: number;
+  quiz_title: string;
+};
+
+export type ActivityDay = { date: string; count: number };
+
+export type ActivityBreakdown = {
+  teacher_messages: number;
+  quiz_submissions: number;
+  group_messages: number;
+  documents_uploaded: number;
+  projects_updated: number;
+  podcasts_created: number;
+};
+
+export type ProjectStatusSlice = { label: string; value: number; percent: number };
+
+export type ProgressDashboard = {
+  summary: ProgressSummary;
+  quiz_scores_timeline: QuizScorePoint[];
+  activity_last_14_days: ActivityDay[];
+  activity_breakdown: ActivityBreakdown;
+  project_status_slices: ProjectStatusSlice[];
+  insights: string[];
+};
+
+export async function fetchProgressDashboard(): Promise<ProgressDashboard> {
+  return apiFetch<ProgressDashboard>("/progress");
 }

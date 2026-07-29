@@ -1,6 +1,22 @@
 from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserOut
 from app.schemas.document import DocumentOut, ExternalSourceImportRequest, SelectedDocumentsRequest, SelectedDocumentsResponse
+from app.schemas.group_learning import (
+    GroupLearningMessageOut,
+    GroupLearningMessagesResponse,
+    GroupLearningPostMessage,
+    GroupLearningReplyOut,
+    GroupLearningSessionCreate,
+    GroupLearningSessionOut,
+)
 from app.schemas.podcast import PodcastGenerateRequest, PodcastOut
+from app.schemas.progress import (
+    ActivityBreakdown,
+    ActivityDay,
+    ProgressDashboardResponse,
+    ProgressSummary,
+    ProjectStatusSlice,
+    QuizScorePoint,
+)
 from app.schemas.quiz import GradeOut, QuestionOut, QuizGenerateRequest, QuizOut, QuizSubmitRequest
 from app.schemas.teacher import (
     ProjectIdeasRequest,
@@ -22,9 +38,21 @@ __all__ = [
     "DocumentOut",
     "ExternalSourceImportRequest",
     "GradeOut",
+    "GroupLearningMessageOut",
+    "GroupLearningMessagesResponse",
+    "GroupLearningPostMessage",
+    "GroupLearningReplyOut",
+    "GroupLearningSessionCreate",
+    "GroupLearningSessionOut",
     "LoginRequest",
     "PodcastGenerateRequest",
     "PodcastOut",
+    "ActivityBreakdown",
+    "ActivityDay",
+    "ProgressDashboardResponse",
+    "ProgressSummary",
+    "ProjectStatusSlice",
+    "QuizScorePoint",
     "ProjectIdeasRequest",
     "ProjectIdeasResponse",
     "ProjectImportance",

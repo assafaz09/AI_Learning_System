@@ -19,6 +19,7 @@ import {
   TeacherMessage,
   uploadFiles
 } from "../../lib/api";
+import { handleComposerEnterKeyDown } from "../../lib/composerEnter";
 import {
   defaultSaveTitle,
   splitProjectSuggestions,
@@ -100,7 +101,7 @@ export default function TeacherPage() {
   const [podcastAudioLoading, setPodcastAudioLoading] = useState(false);
   const [podcastAudioError, setPodcastAudioError] = useState("");
   const podcastAudioUrlRef = useRef<string | null>(null);
-  const streamAnchorRef = useRef<HTMLDivElement | null>(null);
+  const chatCanvasRef = useRef<HTMLElement | null>(null);
   const importTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [projectFocus, setProjectFocus] = useState("");
   const [projectBand, setProjectBand] = useState<ExperienceBand>("beginner_short");
@@ -241,10 +242,11 @@ export default function TeacherPage() {
   }, [playingPodcastId, isGeneratingPodcast]);
 
   useEffect(() => {
-    if (!streamAnchorRef.current) {
+    const el = chatCanvasRef.current;
+    if (!el) {
       return;
     }
-    streamAnchorRef.current.scrollIntoView?.({ behavior: "smooth", block: "end" });
+    el.scrollTop = el.scrollHeight;
   }, [messages, isStreaming]);
 
   const onFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -605,7 +607,7 @@ export default function TeacherPage() {
           </button>
         </header>
 
-        <section className="teacher-chat-canvas" role="log" aria-live="polite">
+        <section ref={chatCanvasRef} className="teacher-chat-canvas" role="log" aria-live="polite">
           {loadingConversation ? <p className="status">טוען שיחה...</p> : null}
           {messages.length === 0 && !loadingConversation ? (
             <div className="teacher-empty-state">
@@ -622,7 +624,6 @@ export default function TeacherPage() {
               <p>{message.content || "המורה מקליד..."}</p>
             </article>
           ))}
-          <div ref={streamAnchorRef} />
         </section>
 
         <footer className="teacher-composer-wrap">
@@ -632,6 +633,7 @@ export default function TeacherPage() {
               placeholder="Ask in English or Hebrew..."
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => handleComposerEnterKeyDown(e, canAsk)}
               disabled={isStreaming}
             />
             <button type="submit" disabled={!canAsk}>
@@ -800,6 +802,7 @@ export default function TeacherPage() {
                           placeholder="נושא מהחומר, מיומנות, או סוג פרויקט..."
                           value={projectFocus}
                           onChange={(e) => setProjectFocus(e.target.value)}
+                          onKeyDown={(e) => handleComposerEnterKeyDown(e, canSuggestProjects)}
                           disabled={projectLoading}
                         />
                       </label>

@@ -8,8 +8,9 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 const publicPaths = new Set(["/", "/auth", "/login", "/register"]);
 
 const links: { href: Route; label: string }[] = [
-  { href: "/dashboard", label: "בית" },
+  { href: "/dashboard", label: "התקדמות" },
   { href: "/teacher", label: "המורה שלך" },
+  { href: "/group-learning" as Route, label: "למידה בקבוצה" },
   { href: "/teacher/my-projects" as Route, label: "פרויקטים שלי" },
   { href: "/quiz", label: "צור שאלון" },
   { href: "/grader", label: "בחן את עצמך" },

@@ -13,6 +13,7 @@ import {
   SavedProjectStatus,
   updateSavedProject
 } from "../../../lib/api";
+import { handleComposerEnterKeyDown } from "../../../lib/composerEnter";
 import {
   defaultSaveTitle,
   splitProjectSuggestions,
@@ -55,6 +56,11 @@ export default function MyProjectsPage() {
   const [manualStatus, setManualStatus] = useState<SavedProjectStatus>("not_started");
   const [manualSaving, setManualSaving] = useState(false);
   const [manualStatusMsg, setManualStatusMsg] = useState("");
+
+  const canSubmitManual = useMemo(
+    () => Boolean(manualTitle.trim() && manualDescription.trim() && !manualSaving),
+    [manualTitle, manualDescription, manualSaving]
+  );
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
   const [titleDraftById, setTitleDraftById] = useState<Record<number, string>>({});
@@ -344,6 +350,7 @@ export default function MyProjectsPage() {
               className="surface"
               value={manualDescription}
               onChange={(e) => setManualDescription(e.target.value)}
+              onKeyDown={(e) => handleComposerEnterKeyDown(e, canSubmitManual)}
               disabled={manualSaving}
             />
           </label>

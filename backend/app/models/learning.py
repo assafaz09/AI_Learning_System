@@ -105,6 +105,33 @@ class UserDocumentSelection(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class GroupLearningSession(Base):
+    __tablename__ = "group_learning_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255), default="למידה בקבוצה")
+    document_ids_json: Mapped[str] = mapped_column(Text)
+    # Which peer speaks on the next user message: "novice" | "intermediate"
+    next_speaker: Mapped[str] = mapped_column(String(32), default="novice")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    messages: Mapped[list["GroupLearningMessage"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+class GroupLearningMessage(Base):
+    __tablename__ = "group_learning_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("group_learning_sessions.id"), index=True)
+    role: Mapped[str] = mapped_column(String(32))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    session: Mapped["GroupLearningSession"] = relationship(back_populates="messages")
+
+
 class LearningProject(Base):
     __tablename__ = "learning_projects"
 

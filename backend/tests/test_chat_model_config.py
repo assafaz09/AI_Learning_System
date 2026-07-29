@@ -24,11 +24,15 @@ def test_resolve_chat_model_uses_explicit_overrides() -> None:
         openai_model_quiz_generate="gpt-4o-mini",
         openai_model_quiz_grade="gpt-4o",
         openai_model_podcast="gpt-4o-mini",
+        openai_model_group_peer_novice="gpt-4o-mini",
+        openai_model_group_peer_intermediate="gpt-4o",
     )
     assert s.resolve_chat_model("teacher") == "gpt-4o"
     assert s.resolve_chat_model("project_ideas") == "gpt-4o-mini"
     assert s.resolve_chat_model("quiz_grade") == "gpt-4o"
     assert s.resolve_chat_model("podcast") == "gpt-4o-mini"
+    assert s.resolve_chat_model("group_peer_novice") == "gpt-4o-mini"
+    assert s.resolve_chat_model("group_peer_intermediate") == "gpt-4o"
 
 
 def test_get_chat_model_passes_resolved_name_to_chat_openai() -> None:

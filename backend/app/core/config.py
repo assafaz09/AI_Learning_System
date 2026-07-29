@@ -2,7 +2,16 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ChatModelTask = Literal["teacher", "project_ideas", "quiz_generate", "quiz_grade", "podcast", "default"]
+ChatModelTask = Literal[
+    "teacher",
+    "project_ideas",
+    "quiz_generate",
+    "quiz_grade",
+    "podcast",
+    "group_peer_novice",
+    "group_peer_intermediate",
+    "default",
+]
 
 
 class Settings(BaseSettings):
@@ -23,6 +32,8 @@ class Settings(BaseSettings):
     openai_model_quiz_generate: str = ""
     openai_model_quiz_grade: str = ""
     openai_model_podcast: str = ""
+    openai_model_group_peer_novice: str = ""
+    openai_model_group_peer_intermediate: str = ""
     openai_embedding_model: str = "text-embedding-3-small"
     openai_transcription_model: str = "whisper-1"
     openai_tts_model: str = "tts-1"
@@ -56,6 +67,8 @@ class Settings(BaseSettings):
             "quiz_generate": self.openai_model_quiz_generate,
             "quiz_grade": self.openai_model_quiz_grade,
             "podcast": self.openai_model_podcast,
+            "group_peer_novice": self.openai_model_group_peer_novice,
+            "group_peer_intermediate": self.openai_model_group_peer_intermediate,
             "default": "",
         }
         chosen = (per_task.get(task) or "").strip()

@@ -15,6 +15,8 @@ from app.api.routes_grading import router as grading_router
 from app.api.routes_history import router as history_router
 from app.api.routes_podcast import router as podcast_router
 from app.api.routes_quiz import router as quiz_router
+from app.api.routes_group_learning import router as group_learning_router
+from app.api.routes_progress import router as progress_router
 from app.api.routes_teacher import router as teacher_router
 from app.db import Base, engine
 
@@ -53,7 +55,9 @@ def health():
 app.include_router(auth_router)
 app.include_router(documents_router)
 app.include_router(teacher_router)
+app.include_router(group_learning_router)
 app.include_router(quiz_router)
 app.include_router(grading_router)
 app.include_router(history_router)
 app.include_router(podcast_router)
+app.include_router(progress_router)
